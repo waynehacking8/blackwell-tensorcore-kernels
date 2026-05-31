@@ -1,0 +1,4 @@
+build/
+results/*.csv
+results/*.ncu-rep
+results/*.png
