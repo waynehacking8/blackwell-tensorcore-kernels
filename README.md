@@ -37,12 +37,36 @@ docs/roadmap.md
 ```
 
 ## Quick start (on the Blackwell / H100 box)
+
+One command does the full capture — size sweep + Nsight + plots + report:
+
 ```bash
-cmake -B build -DCMAKE_CUDA_ARCHITECTURES="90;120" && cmake --build build -j
-./build/gemm_bench 4096 4096 4096      # M N K -> correctness + TFLOP/s vs cuBLAS
-# profile a kernel:
-ncu --set full -k gemm_wmma ./build/gemm_bench 4096 4096 4096
+make capture            # build -> sweep sizes -> ncu/nsys -> results/report.md + PNGs
+```
+
+The benchmark CSV records the **device and SM** of each run, so to compare both
+generations you run the sweep **once on each GPU** and the rows accumulate:
+
+```bash
+# on the H100 box:           ARCH=90  make bench
+# on the Blackwell box:      ARCH=120 make bench
+make analyze                 # merge both -> results/report.md + results/tflops_sm*.png
+```
+
+Single run / one kernel, by hand:
+
+```bash
+make build
+./build/gemm_bench 4096 4096 4096 results/bench.csv   # M N K [out_csv]
+bash scripts/profile.sh 4096                           # ncu + nsys for gemm_wmma
 ```
 
 ## Results
-TFLOP/s tables + Nsight roofline populated after running on the GPUs — see `results/`. **(in progress)**
+`make capture` produces, in `results/`:
+
+- `bench.csv` — per kernel × size × GPU: ms, TFLOP/s, **% of cuBLAS ceiling**, max abs err.
+- `tflops_sm90.png` / `tflops_sm120.png` — throughput vs size (Hopper vs Blackwell).
+- `ncu_wmma_*.ncu-rep`, `nsys_*.nsys-rep` — Nsight Compute / Systems captures.
+- `report.md` — the summary table + charts.
+
+**(populated after running on the GPUs)**

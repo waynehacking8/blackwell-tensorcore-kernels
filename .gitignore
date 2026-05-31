@@ -1,4 +1,6 @@
 build/
-results/*.csv
+results/_profile_tmp.csv
+# Raw Nsight reports are large/binary — kept local, not committed.
+# The shareable outputs (bench.csv, *.png, report.md) ARE committed.
+results/*.nsys-rep
 results/*.ncu-rep
-results/*.png
