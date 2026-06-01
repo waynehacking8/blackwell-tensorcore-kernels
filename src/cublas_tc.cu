@@ -1,49 +1,43 @@
-// cublas_tc.cu — cuBLAS Tensor Core GEMM baseline (FP16 in / FP32 accumulate).
-// Same-precision honest ceiling for the WMMA kernel: cublasGemmEx with
-// CUDA_R_16F inputs and CUDA_R_32F output. With CUBLAS_COMPUTE_32F and FP16
-// inputs, modern cuBLAS dispatches to the Tensor Core path automatically.
-#include <cuda_runtime.h>
-#include <cuda_fp16.h>
+// cuBLAS Tensor Core baseline: cublasGemmEx, FP16 inputs / FP32 accumulate.
+// This is the *same-precision* ceiling for the WMMA kernel (gemm_wmma.cu also
+// runs FP16 in / FP32 acc), unlike launch_cublas (reference.cu) which runs FP32
+// cublasSgemm on CUDA cores. With CUDA_R_16F inputs, CUDA_R_32F output and
+// CUBLAS_COMPUTE_32F, modern cuBLAS dispatches to the Tensor Core path
+// automatically (CUBLAS_GEMM_DEFAULT).
 #include <cublas_v2.h>
+#include <cuda_fp16.h>
 #include "util.cuh"
 
-// Times cublasGemmEx (FP16 in, FP32 out, Tensor Core path) over `iters`
-// iterations using CUDA events. Returns average milliseconds per call.
-// FP32->FP16 cast is done outside this function (in main.cu), matching the
-// WMMA timing methodology — the cast is not part of the timed region.
-float time_cublas_tc(cublasHandle_t handle,
-                     const half* A, const half* B, float* C,
-                     int M, int N, int K, int iters) {
-    const float alpha = 1.0f, beta = 0.0f;
+__global__ void f2h_tc(const float* in, half* out, int n){
+  int i=blockIdx.x*blockDim.x+threadIdx.x; if(i<n) out[i]=__float2half(in[i]);
+}
 
-    // warmup
-    CUBLAS_CHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N,
-                              M, N, K, &alpha,
-                              A, CUDA_R_16F, M,
-                              B, CUDA_R_16F, K,
-                              &beta,
-                              C, CUDA_R_32F, M,
-                              CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT));
-    CUDA_CHECK(cudaDeviceSynchronize());
+void launch_cublas_tc(const float*A,const float*B,float*C,int M,int N,int K){
+  // Stage A,B into FP16 ONCE and reuse across repeated calls with the same
+  // inputs, so the benchmark times the Tensor Core GEMM itself — not the
+  // one-time FP32->FP16 cast or cudaMalloc/Free. Same methodology as
+  // gemm_wmma.cu's launch_wmma; the cast is outside the timed region.
+  static half *Ah=nullptr,*Bh=nullptr;
+  static const float *cA=nullptr,*cB=nullptr; static int cM=0,cN=0,cK=0;
+  if(M!=cM || N!=cN || K!=cK){ cudaFree(Ah); cudaFree(Bh); Ah=Bh=nullptr; cA=cB=nullptr; }
+  if(!Ah){
+    CUDA_CHECK(cudaMalloc(&Ah,sizeof(half)*M*K));
+    CUDA_CHECK(cudaMalloc(&Bh,sizeof(half)*K*N));
+    cM=M; cN=N; cK=K;
+  }
+  if(A!=cA){ int n=M*K; f2h_tc<<<(n+255)/256,256>>>(A,Ah,n); cA=A; }
+  if(B!=cB){ int n=K*N; f2h_tc<<<(n+255)/256,256>>>(B,Bh,n); cB=B; }
 
-    cudaEvent_t s, e;
-    CUDA_CHECK(cudaEventCreate(&s));
-    CUDA_CHECK(cudaEventCreate(&e));
-    CUDA_CHECK(cudaEventRecord(s));
-    for (int it = 0; it < iters; ++it) {
-        CUBLAS_CHECK(cublasGemmEx(handle, CUBLAS_OP_N, CUBLAS_OP_N,
-                                  M, N, K, &alpha,
-                                  A, CUDA_R_16F, M,
-                                  B, CUDA_R_16F, K,
-                                  &beta,
-                                  C, CUDA_R_32F, M,
-                                  CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT));
-    }
-    CUDA_CHECK(cudaEventRecord(e));
-    CUDA_CHECK(cudaEventSynchronize(e));
-    float ms = 0;
-    CUDA_CHECK(cudaEventElapsedTime(&ms, s, e));
-    CUDA_CHECK(cudaEventDestroy(s));
-    CUDA_CHECK(cudaEventDestroy(e));
-    return ms / iters;
+  cublasHandle_t h; cublasCreate(&h);
+  float al=1.f,be=0.f;
+  // cuBLAS is column-major: compute C^T = B^T A^T by swapping args, matching
+  // reference.cu. Output stays FP32 (CUDA_R_32F) so the correctness check and
+  // the existing C buffer are unchanged.
+  cublasGemmEx(h,CUBLAS_OP_N,CUBLAS_OP_N,N,M,K,&al,
+               Bh,CUDA_R_16F,N,
+               Ah,CUDA_R_16F,K,
+               &be,
+               C,CUDA_R_32F,N,
+               CUBLAS_COMPUTE_32F,CUBLAS_GEMM_DEFAULT);
+  cublasDestroy(h);
 }

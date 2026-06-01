@@ -9,7 +9,9 @@ import csv, os, collections
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSV  = os.path.join(HERE, "results", "bench.csv")
-KORDER = ["naive", "tiled", "wmma", "cublas"]
+# "cublas"    = cublasSgemm  (FP32, CUDA cores)        — precision-mismatched baseline
+# "cublas_tc" = cublasGemmEx (FP16 in / FP32 acc, TC)  — same-precision honest ceiling
+KORDER = ["naive", "tiled", "wmma", "cublas", "cublas_tc"]
 
 
 def load(path):
@@ -57,16 +59,30 @@ def main():
             lines.append(f"![throughput](tflops_sm{sm}.png)\n")
 
         big = max(sizes)
+        # TFLOP/s of each baseline at the largest size, for the % columns.
+        # pct_of_cublas in the CSV is vs FP32 cublasSgemm (precision-mismatched).
+        # We also derive % of the same-precision Tensor Core ceiling (cublas_tc).
+        tc_tf = next((r[1] for r in sorted(kerns.get("cublas_tc", [])) if r[0] == big), None)
+
         lines.append(f"At M=N=K={big}:\n")
-        lines.append("| kernel | TFLOP/s | % of cuBLAS | max abs err |")
-        lines.append("|---|---|---|---|")
+        lines.append("| kernel | TFLOP/s | % of FP32 cuBLAS | % of cuBLAS-TC | max abs err |")
+        lines.append("|---|---|---|---|---|")
         for k in KORDER:
             if k in kerns:
                 row = next((r for r in sorted(kerns[k]) if r[0] == big), None)
                 if row:
                     _, tf, pct, err = row
-                    lines.append(f"| {k} | {tf:.1f} | {pct:.1f}% | {err:.3g} |")
+                    pct_tc = f"{100.0 * tf / tc_tf:.1f}%" if tc_tf else "n/a"
+                    lines.append(f"| {k} | {tf:.1f} | {pct:.1f}% | {pct_tc} | {err:.3g} |")
         lines.append("")
+        lines.append(
+            "> **% of FP32 cuBLAS** is vs `cublasSgemm` (FP32, CUDA cores) — "
+            "precision-mismatched, **not** a Tensor Core ceiling; >100% reflects "
+            "FP16-TC vs FP32-CUDA-core, not a kernel beating cuBLAS. "
+            "**% of cuBLAS-TC** is vs `cublasGemmEx` (FP16 in / FP32 acc, Tensor "
+            "Cores) — the honest same-precision ceiling. `n/a` if no `cublas_tc` "
+            "row is present (re-run the sweep to populate it).\n"
+        )
 
     out = os.path.join(HERE, "results", "report.md")
     with open(out, "w") as f:
