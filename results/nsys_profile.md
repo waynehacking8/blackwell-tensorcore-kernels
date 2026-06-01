@@ -188,9 +188,12 @@ Reading the two columns side by side:
 
 This is the quantified version of the architectural statement: **on Hopper, the Tensor Core
 peak is only reachable via `wgmma.mma_async`** (warpgroup MMA). The WMMA API lowers to
-`mma.sync` and cannot emit it. Microbenchmark literature measures the same thing
-(arXiv:2402.13499 §Tensor-Core ISA, arXiv:2501.12084): the `mma`-path tops out at a small
-fraction of the `wgmma`-path on H100.
+`mma.sync` and cannot emit it. Instruction-level microbenchmarks put numbers on the split
+(arXiv:2501.12084, on H800): dense FP16 `mma` = **494 TFLOPS = 65% of peak**; `wgmma` =
+**729 TFLOPS = 96% of peak**. Two consequences for our kernel: (1) even perfectly fed,
+a WMMA kernel stops at ~65% of peak — the last third belongs to `wgmma`; (2) ours is far below
+even that (6% of peak), because — per the ncu table above — it is *feed-bound*: the
+shared-memory pipeline tuned for sm_120's 3.3×-slower Tensor Cores cannot keep Hopper's fed.
 
 ## The cross-generation summary (same source code, both cards)
 
@@ -201,9 +204,10 @@ fraction of the `wgmma`-path on H100.
 | **WMMA % of ceiling** | **45.2%** | **8.0%** |
 | ceiling % of card's FP16 peak | ~92% of ~250 TFLOP/s | ~77% of 989 TFLOP/s |
 
-The kernel's *absolute* speed difference (103 vs 61 TFLOP/s) tracks what `mma.sync`-issue-bound
-code should do — the RTX Pro 6000 has more SMs (188 vs 132) at higher clocks. The *relative*
-collapse (45% → 8%) is entirely the ceiling moving: each GPU generation hides its Tensor Core
-peak behind a new instruction (Ampere `mma.sync`+`cp.async` → Hopper `wgmma`+TMA → Blackwell
-`tcgen05`), and code written against the previous abstraction keeps its absolute speed while
-silently losing its relative one.
+The kernel's *absolute* speed difference (103 vs 61 TFLOP/s) tracks what feed-bound
+`mma.sync` code should do — the RTX Pro 6000 has more SMs (188 vs 132, spec-verified) at
+higher clocks (2617 vs 1980 MHz boost; SM×clock ratio 1.88×, measured ratio 1.70× — the
+Max-Q power limit explains the shortfall). The *relative* collapse (45% → 8%) is the ceiling
+moving: each GPU generation hides its Tensor Core peak behind a new instruction (Ampere
+`mma.sync`+`cp.async` → Hopper `wgmma`+TMA → Blackwell `tcgen05`), and code written against
+the previous abstraction keeps its absolute speed while silently losing its relative one.

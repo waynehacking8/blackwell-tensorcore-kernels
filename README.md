@@ -145,13 +145,15 @@ Two things happened at once, and `nsys`/`ncu` separate them cleanly
    TFLOP/s FP16 dense peak**. On the RTX Pro 6000, cuBLAS-TC tops out at 229 TFLOP/s (an
    sm_80-style `cutlass_80_tensorop` kernel). The H100 ceiling is **3.3× higher** in absolute
    terms.
-2. **Our kernel cannot follow it.** The WMMA API lowers to per-warp `mma.sync` instructions.
-   On Hopper, `mma.sync` cannot reach the Tensor Core peak — that requires `wgmma.mma_async`
-   (warpgroup MMA, 128 threads cooperating, operands fed from shared memory). This is a
-   documented architectural property, not a tuning gap: Hopper microbenchmark studies
-   (arXiv:2402.13499, arXiv:2501.12084) measure the `mma`-path far below the `wgmma`-path,
-   and worked H100 GEMM examples show WMMA-only kernels plateau near ~10% of peak regardless
-   of tiling effort.
+2. **Our kernel cannot follow it — for two stacked reasons.** (a) *Architectural*: the WMMA
+   API lowers to per-warp `mma.sync`, and on Hopper `mma.sync` cannot reach the Tensor Core
+   peak — instruction-level microbenchmarks (arXiv:2501.12084) measure the `mma` path at
+   **~63–65% of peak** (494 of 757 TFLOPS on H800) vs **~96%** for `wgmma`. (b) *Kernel*: our
+   kernel doesn't even reach that mma.sync ceiling — it reaches 6% of peak, because its
+   shared-memory operand pipeline (tile sizes and 3-stage `cp.async` depth tuned on sm_120,
+   where the Tensor Cores are 3.3× slower) cannot feed Hopper's TCs; the ncu profile below
+   shows it is MIO/feed-bound, not math-bound. Closing (b) with Hopper-tuned staging would
+   still leave (a) — the wgmma-only gap to cuBLAS.
 
 `ncu --set full` on both kernels at 8192³ quantifies the gap (full table in
 `results/nsys_profile.md`):
@@ -171,9 +173,10 @@ issue slots on shared-memory `ld`/`st` (MIO stalls) feeding fragments to `mma.sy
 occupancy, low utilization.
 
 **What transfers across generations and what doesn't:** the optimization *story* (tiling,
-`cp.async` pipelining, register tiling) transfers — the kernel's absolute TFLOP/s is nearly
-identical on both cards (103 vs 61 TFLOP/s, the difference tracking SM count × clock for
-`mma.sync`-issue-bound code). What does **not** transfer is the *fraction of the ceiling*:
+`cp.async` pipelining, register tiling) transfers — the kernel's absolute TFLOP/s scales only
+with SM count × clock (103 vs 61 TFLOP/s; the spec SM×clock ratio is 1.88×, measured 1.70× —
+the Max-Q power limit accounts for the difference). What does **not** transfer is the
+*fraction of the ceiling*:
 each architecture generation moves the ceiling behind a new instruction (Volta `mma.sync` →
 Ampere `mma.sync`+`cp.async` → Hopper `wgmma`+TMA → Blackwell `tcgen05`), and a kernel written
 against the previous generation's abstraction silently keeps its absolute speed while losing

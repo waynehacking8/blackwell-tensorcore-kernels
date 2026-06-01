@@ -162,18 +162,31 @@ box):
 | FP32 `cublasSgemm` dispatches sm_80 FFMA kernel | yes | yes | the "baseline is an sm_80 kernel" statement holds on both — no scoping needed |
 | max abs err (wmma, 8192) | 0.0112 | 0.0112 | bit-identical rounding behavior — same code, same math |
 
-**Why the % collapses (cross-checked against literature):** Hopper's Tensor Core peak is only
-reachable via `wgmma.mma_async` (warpgroup MMA, async, operands fed from shared memory). The
-WMMA API lowers to per-warp `mma.sync` and cannot emit `wgmma`. Hopper microbenchmark papers
-measure exactly this split: ["Benchmarking and Dissecting the Nvidia Hopper GPU
-Architecture"](https://arxiv.org/abs/2402.13499) and ["Dissecting the NVIDIA Hopper Architecture
-through Microbenchmarking"](https://arxiv.org/abs/2501.12084) both find the `mma`-path far below
-the `wgmma`-path; worked H100 GEMM optimization logs (e.g. Hamza El-Shafie's cuBLAS-chasing
-worklog) show WMMA-only kernels plateau around ~10% of peak regardless of tiling effort. Our
-8.0% measurement sits exactly in that band — the *measured* confirmation of a documented
-architectural property, plus the ncu evidence (`results/nsys_profile.md`, H100 section) showing
-*where* the cycles go: MIO/shared-memory stalls feeding `mma.sync` vs `wgmma` reading shared
-memory directly.
+**Why the % collapses (cross-checked against literature):** two stacked effects, and the
+literature lets us separate them.
+
+1. *Architectural ceiling for the instruction class.* The WMMA API lowers to per-warp
+   `mma.sync` and cannot emit `wgmma.mma_async`. ["Dissecting the NVIDIA Hopper Architecture
+   through Microbenchmarking" (arXiv:2501.12084)](https://arxiv.org/abs/2501.12084) measures
+   the split precisely on H800: dense FP16 `mma` (m16n8k16) reaches **494.4 TFLOPS = 65.3% of
+   the 756.5 peak** ("mma instructions on Hopper can only attain an average of 62.9% of the
+   theoretical peak"), while `wgmma` (m64n256k16) reaches **729.3 TFLOPS = 96.4%**.
+   ["Benchmarking and Dissecting the Nvidia Hopper GPU Architecture"
+   (arXiv:2402.13499)](https://arxiv.org/abs/2402.13499) reports the same qualitative split.
+   So even a *perfectly fed* WMMA/`mma.sync` kernel tops out near **~63–65% of peak** on
+   Hopper — the last ~35% belongs to `wgmma` alone.
+2. *Our kernel is additionally feed-bound, well below that ceiling.* 60.9 TFLOPS = **6.2% of
+   peak** — an order of magnitude below the mma.sync ceiling. The ncu profile
+   (`results/nsys_profile.md`, H100 section) shows why: 26.7% SM compute with 90.5% L1/shared
+   throughput and MIO-queue-full as the top stall — the shared-memory operand pipeline (tile
+   size and 3-stage `cp.async` depth tuned on sm_120, whose Tensor Cores are 3.3× slower)
+   cannot feed Hopper's TCs. The kernel kept the *same absolute* operand-feed rate on both
+   cards, which was 45% of the ceiling on sm_120 and is 8% of the 3.3×-higher ceiling on H100.
+
+The honest summary: the 45.2% → 8.0% collapse is **(ceiling moved 3.3× up) × (our feed
+pipeline did not move)**. Hopper-tuned operand staging could in principle recover to roughly
+the mma.sync ceiling (~63–65% of peak ≈ ~85% of cuBLAS-TC); the remainder is unreachable
+without `wgmma` — i.e., without abandoning the WMMA API this repo is about.
 
 ## Sources
 - [Benchmarking and Dissecting the Nvidia Hopper GPU Architecture (arXiv:2402.13499)](https://arxiv.org/abs/2402.13499) — Hopper `wgmma` vs `mma` Tensor Core paths.
