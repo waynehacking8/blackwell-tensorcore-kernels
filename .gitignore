@@ -4,3 +4,4 @@ results/_profile_tmp.csv
 # The shareable outputs (bench.csv, *.png, report.md) ARE committed.
 results/*.nsys-rep
 results/*.ncu-rep
+results/*.sqlite
