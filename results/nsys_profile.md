@@ -48,3 +48,30 @@ confirming the FP16 staging is **not** in the timed region.)
 `cp.async` double-buffering to `gemm_wmma` (mirror cuBLAS's multi-stage `128x64` structure) —
 that's the single change expected to move WMMA off the ~20% memory-bound plateau toward the
 Tensor Core ceiling.
+
+## Optimization result — shared-memory + cp.async double-buffering
+
+The WMMA kernel was rewritten from naive (per-warp 16×16, fragments loaded straight from
+global memory) to a **64×64 block tile, BK=32, with a 2-stage `cp.async`
+(`__pipeline_memcpy_async`) shared-memory pipeline** — the next K-slab is prefetched while the
+current one feeds the Tensor Cores. Correctness is unchanged (maxerr 0.00769 @4096, 0.0112
+@8192, identical to before).
+
+nsys kernel time at 4096 (`gemm_wmma`, per-instance avg): **2903 µs → 2180 µs (−25%)**, i.e.
+**19.7% → 26.3% of the cuBLAS tensorop kernel** (574 µs) — and the kernel-only ratio matches
+the end-to-end 26.4% from `bench.csv`, so the harness stays clean.
+
+| size | wmma naive | wmma opt | speedup | naive % of cuBLAS-TC | opt % of cuBLAS-TC |
+|---|---|---|---|---|---|
+| 512  | 13.89 | 16.12 | 1.16× | 42.6% | 49.5% |
+| 1024 | 31.68 | 40.05 | 1.26× | 22.6% | 28.6% |
+| 2048 | 44.47 | 56.03 | 1.26× | 20.8% | 26.2% |
+| 4096 | 47.61 | 62.99 | 1.32× | 20.0% | 26.4% |
+| 8192 | 39.77 | 62.65 | **1.58×** | 17.3% | **27.3%** |
+
+The biggest gain is at the **largest** size (1.58× @ 8192), exactly where the naive kernel was
+memory-bound: naive WMMA *fell back* to 39.8 TFLOP/s at 8192, while the pipelined version
+**holds ~63 TFLOP/s** and no longer decays — confirming the bottleneck was global-memory
+traffic, not the Tensor Core math, as the profile predicted. Remaining gap to cuBLAS (~27% vs
+100%) is the deeper pipeline (cuBLAS uses 3+ stages, register-level tiling, and a larger
+128×64 CTA tile); closing it further would mean more pipeline stages and warp-specialization.
