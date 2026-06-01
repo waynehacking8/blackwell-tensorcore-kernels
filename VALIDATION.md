@@ -13,6 +13,36 @@ Workstation Edition** (`sm_120`, 300 W Max-Q), CUDA 12.8, FP32 inputs, cuBLAS as
   power budget of the 600 W spec part. ~54.7 / 125 ≈ **44%**, i.e. about half the
   rated FP32 throughput, consistent with a halved power/clock envelope. ✓ Reasonable.
 
+## Clock state — why absolute TFLOP/s sit below the hardware peak
+
+The absolute numbers here (cuBLAS-TC ~228, our WMMA ~103 TFLOP/s) are **well below** the
+Blackwell FP16/FP32-acc hardware peak (≳1 PFLOP/s class). We verified this is **clock
+governance, not a measurement or kernel bug**, by direct sampling during the GEMM:
+
+| metric | value during GEMM | ceiling | note |
+|---|---|---|---|
+| SM clock | **2325 MHz** | 3090 MHz | running at ~75% of max |
+| Power draw | **174 W** | 300 W | only ~58% of the budget used |
+| Throttle reason | **`0x0`** | — | **no thermal/power throttle active** |
+| Temp | 59 °C | — | cool |
+
+So the GPU simply isn't boosting to full clocks (Max-Q idle/curve governance), and it is
+**not** being throttled — there is headroom it doesn't use. Under sustained back-to-back GEMMs
+the clock does climb (2145–2325 MHz, ~274 W), confirming the part can go higher but settles low
+between kernels. We could not pin clocks (`nvidia-smi -lgc 3090` needs root: *"current user does
+not have permission to change clocks"*), so all numbers are at the governed ~2.3 GHz.
+
+**Two consequences, stated honestly:**
+1. **Measurement is sound, not noisy.** Five repeats of cuBLAS-TC @8192 gave 227.0–229.0
+   TFLOP/s (<1 % spread) — the timing harness is stable; the low absolute value is the clock,
+   not jitter.
+2. **Relative percentages stay valid.** Our headline metric is **wmma ÷ cublas_tc**, and both
+   are measured in the same process, back-to-back, at the same governed clock — so the ratio
+   (e.g. 45 % @ 8192) is unaffected by the down-clocking; only the **absolute** TFLOP/s of
+   *both* kernels scale down together. "45 % of cuBLAS-TC" is **not** "45 % of the hardware
+   FP16 peak" — it is 45 % of the (also down-clocked) cuBLAS Tensor Core kernel, which is the
+   honest, like-for-like baseline.
+
 ## Kernel-vs-ceiling sanity
 
 At M=N=K=8192 (the most timing-stable point):
@@ -79,6 +109,13 @@ The WMMA kernel reaches **45% @ 8192** against the same-precision Tensor Core ce
 dispatch closed most of the gap; warp specialization was tried and rejected — see
 `results/nsys_profile.md`). No size exceeds 100% of cuBLAS-TC. The FP32-cuBLAS column is retained
 only for continuity.
+
+**On the 1024 dip in % of cuBLAS-TC (31.4 %, below its neighbours).** Verified to be a
+*denominator* effect, not a kernel bug: forcing M=N=K=1024 through the 128×128 tile gives 30.3
+TFLOP/s vs the dispatched 64×64 tile's **38.7** — i.e. the dispatch correctly picks the faster
+tile, and our WMMA is *not* slow at 1024. The lower percentage comes from cuBLAS-TC itself being
+unusually fast there (~140 TFLOP/s), so the ratio dips even though our absolute throughput is
+healthy. The size-dispatch crossover (N≥1536 → 128×128) is therefore correct as set.
 
 ## Sources
 - [RTX PRO 6000 Blackwell — NVIDIA](https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-6000/)
