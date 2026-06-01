@@ -17,46 +17,59 @@ Workstation Edition** (`sm_120`, 300 W Max-Q), CUDA 12.8, FP32 inputs, cuBLAS as
 
 At M=N=K=8192 (the most timing-stable point):
 
-| kernel | TFLOP/s | % of FP32 cuBLAS | max abs err | reading |
-|---|---|---|---|---|
-| naive | 4.7 | 8.6% | 0 | one-thread-per-output, no reuse — expected floor |
-| tiled | 7.2 | 13.2% | 0 | shared-mem + register block, ~1.5× naive |
-| **wmma** | 39.7 | **72.6%** † | 0.011 | FP16-input Tensor Core, FP32 accumulate |
-| cublas | 54.7 | 100% | 0 | FP32 ceiling (cublasSgemm, CUDA cores) |
+| kernel | TFLOP/s | % of FP32 cuBLAS | % of cuBLAS-TC | max abs err | reading |
+|---|---|---|---|---|---|
+| naive | 4.8 | 8.7% | 2.1% | 0 | one-thread-per-output, no reuse — expected floor |
+| tiled | 7.3 | 13.4% | 3.2% | 0 | shared-mem + register block, ~1.5× naive |
+| **wmma** | 39.8 | 73.1% † | **17.4%** | 0.011 | FP16-input Tensor Core, FP32 accumulate |
+| cublas | 54.4 | 100% | 23.7% | 0 | FP32 baseline (cublasSgemm, CUDA cores) |
+| **cublas_tc** | 229.1 | 421% † | **100%** | 0.011 | FP16/FP32-acc Tensor Core ceiling (cublasGemmEx) |
 
-> **% of FP32 cuBLAS** is vs `cublasSgemm` (FP32, CUDA cores), **not** a Tensor Core
-> ceiling. **†** Precision-mismatched: WMMA runs FP16 on Tensor Cores. The `>100%` rows
-> (907% @ 512, 306% @ 1024 in `bench.csv`) are **not** a kernel beating cuBLAS — they
-> reflect the FP16-TC vs FP32-CUDA-core mismatch (plus small-size launch overhead).
+> **% of cuBLAS-TC** is the honest same-precision ceiling (vs `cublasGemmEx`, FP16 in / FP32
+> acc, Tensor Cores). **% of FP32 cuBLAS** is vs `cublasSgemm` (FP32, CUDA cores) and is
+> precision-mismatched (**†**): WMMA and cublas_tc run FP16 on Tensor Cores, so their `>100%`
+> rows there (e.g. wmma 932% @ 512, cublas_tc 421% @ 8192) are **not** kernels beating cuBLAS —
+> just FP16-TC vs FP32-CUDA-core. Against the same-precision cuBLAS-TC ceiling the naive WMMA
+> kernel sits at **~17–22%** at large sizes (17.4% @ 8192, 20.0% @ 4096, 20.7% @ 2048, 22.5% @
+> 1024; 42.2% @ 512 is small-matrix launch overhead) — the expected naive-WMMA range.
 
-- **WMMA % of FP32 cuBLAS is plausible and the timing fix worked.** The WMMA kernel uses
-  FP16-input Tensor Cores vs an FP32 cuBLAS baseline, so against that mismatched baseline
-  it shows >100% at small N (907% @ 512, 306% @ 1024 — Tensor Cores ≫ FP32 CUDA cores;
-  this is the precision mismatch, not the kernel outperforming a same-precision cuBLAS)
-  and settles to ~73% at 8192 as the naive (no shared-mem double-buffer) kernel becomes
-  memory-bound and the Tensor Cores starve. That monotone-then-plateau shape is the
-  textbook naive-WMMA signature; before the "time the GEMM, not the FP16 cast" fix the
-  numbers were meaningless.
-- **Precision check:** naive/tiled (FP32) max-abs-err ~1e-4→0; wmma (FP16 inputs)
+- **WMMA against the honest same-precision ceiling.** Vs cuBLAS-TC (same FP16-in/FP32-acc
+  Tensor Core path), the naive WMMA kernel lands at **~17–22%** across large sizes (17.4% @
+  8192 … 22.5% @ 1024), exactly the expected naive-WMMA range — it has no shared-memory
+  double-buffering, so at large N the Tensor Cores starve on global-memory traffic while
+  cuBLAS-TC stays fed. The old "73% of FP32 cuBLAS" figure was an artifact of the
+  precision-mismatched baseline (FP16-TC vs FP32-CUDA-core), now superseded by the cuBLAS-TC
+  column.
+- **cuBLAS-TC confirms the Tensor Core path.** cublas_tc reaches 229 TFLOP/s @ 8192 — **4.2×**
+  the FP32 cublasSgemm (54.4) and up to **22×** at 512 — which is only possible on the 5th-gen
+  Tensor Cores, so the baseline is doing what it claims.
+- **Precision check:** naive/tiled (FP32) max-abs-err ~1e-4→0; wmma and cublas_tc (FP16 inputs)
   ~0.01 over large K — exactly the expected FP16 rounding, confirming correctness.
 
-## Honest caveat
+## Honest caveat — now resolved by the same-precision baseline
 
-Comparing **FP16-WMMA against an FP32-cuBLAS** ceiling is apples-to-oranges — the
->100% values at small N reflect the precision difference, not WMMA beating a
-same-precision tuned kernel. For a true "% of Tensor-Core ceiling", the reference
-should use `cublasGemmEx` with TF32/FP16 compute (which would push cuBLAS to several
-hundred TFLOP/s and WMMA's % down to the typical ~15–25% naive range). The current
-comparison is honest about this.
+The original "% of FP32 cuBLAS" was apples-to-oranges (FP16-WMMA vs FP32-`cublasSgemm`); its
+`>100%` small-N rows reflect the precision difference, not WMMA beating a same-precision kernel.
+That prediction has now been **measured**: the harness includes **`cublas_tc`
+(`cublasGemmEx`, FP16 in / FP32 accumulate)** in `src/cublas_tc.cu`, with identical timing
+methodology to the WMMA kernel — the FP32→FP16 cast is staged once outside the timed loop, and
+(after a fix) the cuBLAS handle is created once rather than per timed call, which had dominated
+small-N timing.
 
-**Update — the same-precision baseline now exists in the harness.** A Tensor Core cuBLAS
-baseline, **`cublas_tc` (`cublasGemmEx`, FP16 in / FP32 accumulate)** in `src/cublas_tc.cu`,
-has been wired into the benchmark and into `analysis/plot.py` (which now emits a
-**% of cuBLAS-TC** column). It uses identical timing methodology to the WMMA kernel — the
-FP32→FP16 cast is staged once outside the timed loop. **The numbers above are unchanged**
-and are still measured against FP32 `cublasSgemm`; the same-precision % of cuBLAS-TC is
-**pending a re-run on the sm_120 box** and is expected to drop the WMMA figure substantially
-toward that ~15–25% naive-WMMA range.
+Result on sm_120, vs this honest ceiling (full sweep in `bench.csv`; FP32-only sweep preserved
+in `bench_fp32only.csv`):
+
+| size | wmma % of FP32 cuBLAS | **wmma % of cuBLAS-TC** | cublas_tc speedup vs FP32 |
+|---|---|---|---|
+| 512  | 932% | 42.2% | 22.1× |
+| 1024 | 323% | 22.5% | 14.4× |
+| 2048 | 118% | 20.7% | 5.7× |
+| 4096 | 90%  | 20.0% | 4.5× |
+| 8192 | 73%  | **17.4%** | 4.2× |
+
+Exactly as predicted, the WMMA figure drops to the **~17–22%** naive-WMMA range against the
+same-precision Tensor Core ceiling, and no size exceeds 100% of cuBLAS-TC (512's 42% is
+small-matrix launch overhead). The FP32-cuBLAS column is retained only for continuity.
 
 ## Sources
 - [RTX PRO 6000 Blackwell — NVIDIA](https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-6000/)

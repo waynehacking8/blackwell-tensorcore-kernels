@@ -72,20 +72,32 @@ bash scripts/profile.sh 4096                           # ncu + nsys for gemm_wmm
 - `ncu_wmma_*.ncu-rep`, `nsys_*.nsys-rep` — Nsight Compute / Systems captures.
 - `report.md` — the summary table (now with both **% of FP32 cuBLAS** and **% of cuBLAS-TC**) + charts.
 
-**(populated after running on the GPUs)**
+### Measured on RTX PRO 6000 Blackwell Max-Q (sm_120, CUDA 12.8)
+
+TFLOP/s and the WMMA kernel as a fraction of **both** baselines:
+
+| size | wmma | cublas_tc (TC) | cublas (FP32) | wmma % of FP32 cuBLAS | **wmma % of cuBLAS-TC** | cublas_tc speedup vs FP32 |
+|---|---|---|---|---|---|---|
+| 512  | 13.89 | 32.92  | 1.49  | 932.0% | 42.2% | 22.1× |
+| 1024 | 31.68 | 140.69 | 9.80  | 323.4% | 22.5% | 14.4× |
+| 2048 | 44.47 | 214.50 | 37.57 | 118.4% | 20.7% | 5.7× |
+| 4096 | 47.61 | 238.58 | 52.89 | 90.0%  | 20.0% | 4.5× |
+| 8192 | 39.77 | 229.14 | 54.42 | 73.1%  | **17.4%** | 4.2× |
+
+Read the **% of cuBLAS-TC** column — it's the honest same-precision (FP16-in/FP32-acc, Tensor Core)
+ceiling. The naive WMMA kernel sits at **~17–22%** of cuBLAS-TC at the meaningful large sizes (512 is
+inflated by small-matrix launch overhead). The old **% of FP32 cuBLAS** column is kept for continuity
+but is precision-mismatched: its `>100%` rows are **not** the kernel beating cuBLAS, just FP16-TC vs
+FP32-CUDA-core. `cublas_tc` is 4.2–22× faster than `cublasSgemm`, confirming it hits the Tensor Core path.
 
 > ### On the two cuBLAS baselines (read before quoting any "% of cuBLAS")
-> The originally reported percentages (e.g. **907.5% at 512**, and **"WMMA ≈ 72.6% of cuBLAS"**
-> at 8192) are **% of FP32 cuBLAS** — the WMMA kernel runs **FP16 on Tensor Cores** while
-> `cublasSgemm` runs **FP32 on CUDA cores**. That is a **precision-mismatched** comparison and is
-> **not** the Tensor Core ceiling. A `>100%` row does **not** mean a hand-written kernel beats
-> cuBLAS; it reflects the FP16-TC vs FP32-CUDA-core mismatch (plus launch overhead at small sizes).
->
-> A same-precision Tensor Core baseline — **`cublas_tc` (`cublasGemmEx`, FP16 in / FP32 accumulate)**,
-> in `src/cublas_tc.cu` — has been added to the harness with identical timing methodology (FP16 cast
-> staged once outside the timed loop, same as `gemm_wmma.cu`). The report now also computes
-> **% of cuBLAS-TC**. **Those numbers are pending a re-run on the sm_120 box**; against this honest
-> ceiling the WMMA `%` is expected to drop substantially, because `cublasGemmEx` also uses Tensor Cores.
+> **% of FP32 cuBLAS** (e.g. 932% @ 512, 73.1% @ 8192) compares **FP16-on-Tensor-Cores WMMA** against
+> **`cublasSgemm` FP32 on CUDA cores** — precision-mismatched, **not** a Tensor Core ceiling; a `>100%`
+> row reflects that mismatch (plus small-size launch overhead), not a kernel beating cuBLAS.
+> **% of cuBLAS-TC** compares against **`cublas_tc` (`cublasGemmEx`, FP16 in / FP32 accumulate)** in
+> `src/cublas_tc.cu` — same precision, same timing methodology (FP16 cast staged once outside the timed
+> loop; cuBLAS handle created once). Against this honest ceiling WMMA lands at ~17–22% at large sizes,
+> the expected naive-WMMA range.
 
 ## References
 - [NVIDIA CUTLASS](https://github.com/NVIDIA/cutlass) — the production reference for Tensor Core GEMM.
