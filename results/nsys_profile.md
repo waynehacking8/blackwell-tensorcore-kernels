@@ -22,10 +22,16 @@ confirming the FP16 staging is **not** in the timed region.)
 ## What the profile reveals
 
 1. **Both "Tensor Core" things are real, but they are different kernels.** nsys names give it
-   away: `cublas_tc` runs **`...tensorop_s16816gemm_f16...`** — `tensorop` + `16816` is the
-   `mma.m16n8k16` 5th-gen Tensor Core instruction. The FP32 `cublas` baseline runs
-   **`...simt_sgemm...`** — SIMT, i.e. ordinary CUDA cores. So `cublas_tc` is the correct
-   same-precision ceiling; `cublas` (FP32) was the precision-mismatched one.
+   away: `cublas_tc` runs **`cutlass_80_tensorop_s16816gemm_f16_128x64`** — decoded:
+   `80` = **sm_80 (Ampere-generation) kernel**, `tensorop` = Tensor Core, `s16816` =
+   FP32-accumulate `mma.m16n8k16`, `f16` = FP16 inputs, `128x64` = CTA tile M×N. The FP32 `cublas`
+   baseline runs **`...simt_sgemm...`** — SIMT, i.e. ordinary CUDA cores. So `cublas_tc` is the
+   correct same-precision ceiling; `cublas` (FP32) was the precision-mismatched one. **Note the
+   `_80_` prefix: this is an Ampere-style kernel that uses `cp.async` multistage pipelining — it
+   does *not* use TMA and does *not* use warp specialization** (both are sm_90/Hopper+ features).
+   That cuBLAS picked an sm_80-style kernel on this Blackwell (sm_120) card is itself an
+   interesting observed fact (heuristic selection; native sm_120 kernels may exist but weren't
+   chosen for these shapes) — stated without overclaiming the cause.
 
 2. **Our WMMA kernel is ~5× slower than cuBLAS's Tensor Core kernel** (2903 µs vs 573 µs →
    **19.7% kernel-only**), which matches the end-to-end 20.0% from `bench.csv` — the timing
@@ -111,7 +117,17 @@ was implemented and benchmarked head-to-head:
 
 It did not beat the plain multi-stage pipeline, consistent with the depth sweep above: at this
 512-thread / 128×128 tile the `cp.async` pipeline already saturates latency-hiding, so peeling
-4 warps off for production just removes them from mma throughput (and adds barrier cost). Warp
-specialization pays off on Hopper-style persistent/TMA kernels with much larger tiles and
-async-transaction barriers — not here. The probe is kept under `experiments/` (own `main()`,
-not in the build) for reproducibility; the shipped kernel is the multi-stage dispatch one.
+4 warps off for production just removes them from mma throughput (and adds barrier cost). This is
+the **expected outcome per CudaDMA (Bauer et al., SC'11)** — warp specialization pays off only
+when combined with large tiles + async-transfer hardware (TMA) + register reallocation as
+prerequisites; added alone it just removes compute warps and adds sync overhead. (Colfax's CUTLASS
+tutorial measures warp-specialized vs plain multistage at only ~1.7% apart even on Hopper, where
+the prerequisites are present.) The probe is kept under `experiments/` (own `main()`, not in the
+build) for reproducibility; the shipped kernel is the multi-stage dispatch one.
+
+**On the cuBLAS gap (corrected attribution).** The 45%→100% gap to `cublas_tc` is *not* TMA or
+warp specialization: the dispatched kernel `cutlass_80_tensorop_s16816gemm_f16_128x64` is
+Ampere-style (sm_80) cp.async multistage code that uses neither. The gap comes from the larger
+128×64 CTA tile, deeper register-level warp/thread tiling, vectorized loads, swizzle/rasterization,
+and more aggressive multistage cp.async pipelining — consistent with Boehm's published ablation
+reaching ~94% of cuBLAS with tiling alone. See `VALIDATION.md` and the References for sources.

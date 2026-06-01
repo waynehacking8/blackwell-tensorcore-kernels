@@ -83,12 +83,28 @@ At M=N=K=8192 (the most timing-stable point):
   measurement (3 stages 103 > 4 stages 95 > 5 stages 88 TFLOP/s @ 8192). **Warp specialization
   was implemented and benchmarked but did *not* beat the multi-stage pipeline** (95.4 vs 103.2 @
   8192) — at this 512-thread tile the cp.async pipeline already saturates latency-hiding, so
-  dedicating warps to production costs more mma throughput than it saves. The remaining gap to
-  cuBLAS is its larger CTA tile and warp-specialized scheduling on top of TMA-class transfers.
+  dedicating warps to production costs more mma throughput than it saves. This is the **expected
+  outcome per CudaDMA (Bauer et al., SC'11)**: warp specialization only pays off when combined
+  with large tiles + async-transfer hardware (TMA) + register reallocation; added alone it just
+  removes compute warps and adds barrier sync overhead. (Colfax's CUTLASS tutorial finds
+  warp-specialized vs plain multistage differ by only ~1.7% even on Hopper where it applies.)
+  **The remaining gap to cuBLAS is *not* TMA or warp specialization.** nsys shows cuBLAS dispatches
+  `cutlass_80_tensorop_s16816gemm_f16_128x64` — an **Ampere-generation (sm_80) kernel** that uses
+  `cp.async` multistage pipelining; TMA and warp specialization are sm_90/Hopper+ features the
+  baseline does not use (the `cutlass_80_*` name string is the evidence). The gap comes from the
+  larger 128×64 CTA tile, deeper register-level warp/thread tiling, vectorized loads,
+  swizzle/rasterization, and more aggressive multistage cp.async pipelining — exactly the
+  ingredients Boehm's published ablation rides to ~94% of cuBLAS without TMA or warp spec.
   The "% of FP32 cuBLAS" figure remains precision-mismatched and is kept only for continuity.
 - **cuBLAS-TC confirms the Tensor Core path.** cublas_tc reaches 229 TFLOP/s @ 8192 — **4.2×**
-  the FP32 cublasSgemm (54.8) and up to **23×** at 512 — which is only possible on the 5th-gen
-  Tensor Cores, so the baseline is doing what it claims.
+  the FP32 cublasSgemm (54.8) and up to **23×** at 512 — which is only possible on the Tensor
+  Core path, so the baseline is doing what it claims.
+- **Observed-but-not-overclaimed:** on this Blackwell (sm_120) card, cuBLAS *chose* an sm_80-style
+  CUTLASS kernel (`cutlass_80_tensorop_s16816gemm_f16_128x64`) for this problem size — an
+  interesting fact in itself. We note it without overclaiming the cause: this is cuBLAS's internal
+  heuristic selection; native sm_120 kernels may well exist but were not selected for these shapes.
+  The takeaway for the gap analysis is only that the baseline runs Ampere-style cp.async
+  multistage code, not TMA/warp-spec.
 - **Precision check:** naive/tiled (FP32) max-abs-err ~1e-4→0; wmma and cublas_tc (FP16 inputs)
   ~0.01 over large K — exactly the expected FP16 rounding, confirming correctness.
 
@@ -135,3 +151,6 @@ healthy. The size-dispatch crossover (N≥1536 → 128×128) is therefore correc
 - [RTX PRO 6000 Blackwell — NVIDIA](https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-6000/)
 - [RTX PRO 6000 Blackwell spec sheet — flopper.io](https://flopper.io/gpu/nvidia-rtx-pro-6000-blackwell-workstation-edition)
 - [NVIDIA RTX Blackwell PRO GPU Architecture (v1.0 PDF)](https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/NVIDIA-RTX-Blackwell-PRO-GPU-Architecture-v1.0.pdf)
+- [Simon Boehm, "How to Optimize a CUDA Matmul Kernel"](https://siboehm.com/articles/22/CUDA-MMM) — quantified ablation: tiling + vectorized loads + warptiling reach ~94% of cuBLAS without TMA or warp specialization.
+- [CudaDMA: Optimizing GPU Memory Bandwidth via Warp Specialization (Bauer et al., SC'11)](https://research.nvidia.com/publication/2011-11_cudadma-optimizing-gpu-memory-bandwidth-warp-specialization) — warp specialization requires large tiles + async memory hardware + register reallocation as prerequisites.
+- [CUTLASS Efficient GEMM docs](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/efficient_gemm.html) — CTA/warp/thread tiling, multistage pipelining, and kernel naming conventions.

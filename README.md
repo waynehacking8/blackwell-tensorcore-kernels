@@ -114,7 +114,10 @@ ceiling. Across two optimization passes (shared-mem + cp.async, then register ti
 pipeline + size dispatch) the WMMA kernel went from a naive **17.3%** to **45.2%** of cuBLAS-TC
 at 8192 (1.64× the single-buffer version), and no longer decays at scale. Pipeline depth is
 tuned (3 stages > 4 > 5) and **warp specialization was tried but did not beat the multi-stage
-pipeline** — see `results/nsys_profile.md` for the full before/after and the WS experiment.
+pipeline** — the expected outcome per CudaDMA (Bauer et al., SC'11), since warp specialization
+needs large tiles + async-transfer hardware + register reallocation as prerequisites, none of
+which a 512-thread WMMA tile supplies on its own; see `results/nsys_profile.md` for the full
+before/after and the WS experiment.
 The **% of FP32 cuBLAS** column is precision-mismatched (kept for continuity); its `>100%` rows
 are FP16-TC vs FP32-CUDA-core, not the kernel beating cuBLAS. `cublas_tc` is 4.2–23× faster than
 `cublasSgemm`, confirming the Tensor Core path.
@@ -126,12 +129,21 @@ are FP16-TC vs FP32-CUDA-core, not the kernel beating cuBLAS. `cublas_tc` is 4.2
 > **% of cuBLAS-TC** compares against **`cublas_tc` (`cublasGemmEx`, FP16 in / FP32 accumulate)** in
 > `src/cublas_tc.cu` — same precision, same timing methodology (FP16 cast staged once outside the timed
 > loop; cuBLAS handle created once). Against this honest ceiling the optimized WMMA lands at ~45% at
-> large sizes; the remaining gap is cuBLAS's larger 128×64 CTA tile and warp-specialized/register-level
-> scheduling that a WMMA-fragment kernel can't fully match.
+> large sizes. **The remaining gap is *not* TMA or warp specialization** — nsys shows cuBLAS
+> dispatches `cutlass_80_tensorop_s16816gemm_f16_128x64`, an **Ampere-generation (sm_80) kernel**
+> that uses `cp.async` multistage pipelining, *not* TMA and *not* warp specialization (both are
+> sm_90/Hopper+ features). The gap comes from cuBLAS's larger 128×64 CTA tile, deeper
+> register-level warp/thread tiling, vectorized loads, swizzle/rasterization, and more aggressive
+> multistage `cp.async` pipelining — the kernel-name string itself (`cutlass_80_*`) is the
+> evidence. This is consistent with Boehm's published GEMM ablation, where 2D blocktiling +
+> vectorized loads + warptiling reaches ~94% of cuBLAS *without* TMA or warp specialization.
 
 ## References
 - [NVIDIA CUTLASS](https://github.com/NVIDIA/cutlass) — the production reference for Tensor Core GEMM.
 - [WMMA API (CUDA C++ Programming Guide)](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#wmma) — the API used by `gemm_wmma.cu`.
+- [Simon Boehm, "How to Optimize a CUDA Matmul Kernel"](https://siboehm.com/articles/22/CUDA-MMM) — quantified step-by-step ablation: 2D blocktiling alone reaches 68.7% of cuBLAS, +vectorized loads 78.4%, +warptiling 93.7%, all without TMA or warp specialization.
+- [CudaDMA: Optimizing GPU Memory Bandwidth via Warp Specialization (Bauer et al., SC'11)](https://research.nvidia.com/publication/2011-11_cudadma-optimizing-gpu-memory-bandwidth-warp-specialization) — origin of warp specialization; it pays off only with large tiles + async memory hardware + register reallocation.
+- [CUTLASS Efficient GEMM docs](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/efficient_gemm.html) — CTA/warp/thread tiling, multistage pipelining, and kernel naming.
 
 ## Disclaimer
 Personal project for learning and benchmarking. Views and results are my own and do not represent any employer.
