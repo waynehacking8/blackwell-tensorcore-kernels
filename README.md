@@ -18,13 +18,13 @@ Hopper and Blackwell silicon.
 - Builds for **sm_90 (H100)** and **sm_120 (Blackwell RTX Pro 6000)** so the same kernels *can* be
   profiled across two generations.
 
-> **Measurement status:** all numbers in this repo were captured on a single **Blackwell
-> RTX PRO 6000 Max-Q (sm_120)** box — the only GPU available here. The **sm_90 (H100) line is not
-> populated** (no H100 on hand; sm_90 code can't run on sm_120 silicon, and fabricating numbers
-> would defeat the point). The cross-generation comparison is wired and ready — run
-> `ARCH=90 make bench` on any H100 box and the rows accumulate into the same `bench.csv`. In its
-> place, the **precision ladder above (FP32→TF32→FP16, all real, same card)** gives a genuine
-> apples-to-apples comparison of what the Blackwell Tensor Cores do at each precision.
+> **Measurement status:** both generations are now populated in `results/bench.csv` —
+> **Blackwell RTX PRO 6000 Max-Q (sm_120)** and **H100 80GB SXM5 (sm_90)** (run on a separate
+> 8×H100 box, pinned to a single idle GPU). The cross-generation comparison below is the
+> headline finding of this repo: **the same WMMA kernel that reaches 45% of cuBLAS-TC on
+> sm_120 reaches only 8% on H100** — not because the kernel runs slower per-SM, but because
+> Hopper's Tensor Core ceiling is only reachable through `wgmma` warpgroup instructions that
+> the WMMA API cannot emit.
 
 ## What this is NOT
 - Not a cuBLAS replacement — cuBLAS is the ceiling measured against, honestly.
@@ -121,6 +121,64 @@ before/after and the WS experiment.
 The **% of FP32 cuBLAS** column is precision-mismatched (kept for continuity); its `>100%` rows
 are FP16-TC vs FP32-CUDA-core, not the kernel beating cuBLAS. `cublas_tc` is 4.2–23× faster than
 `cublasSgemm`, confirming the Tensor Core path.
+
+### Measured on H100 80GB SXM5 (sm_90, CUDA 13.1) — the cross-generation result
+
+The same source, built with `ARCH=90`, run on one idle GPU of an 8×H100 box
+(`nvcr.io/nvidia/pytorch:26.02-py3` container; the box's busy production GPU was never touched):
+
+![GEMM throughput vs size, H100](results/tflops_sm90.png)
+
+![% of cuBLAS-TC, H100](results/pct_tc_sm90.png)
+
+| size | wmma (TFLOP/s) | cublas_tc (TFLOP/s) | **wmma % of cuBLAS-TC** | same kernel on sm_120 |
+|---|---|---|---|---|
+| 2048 | 56.6 | 555.0 | 10.2% | 31.8% |
+| 4096 | 59.4 | 732.6 | 8.1% | 40.4% |
+| 8192 | 60.9 | 761.7 | **8.0%** | **45.2%** |
+
+Two things happened at once, and `nsys`/`ncu` separate them cleanly
+(see `results/nsys_profile.md` for the full profiles):
+
+1. **The ceiling moved.** On H100, `cublas_tc` dispatches **`nvjet_sm90_hss_320x128`** — a
+   Hopper-native warpgroup (`wgmma`) kernel that reaches **762 TFLOP/s ≈ 77% of H100's 989
+   TFLOP/s FP16 dense peak**. On the RTX Pro 6000, cuBLAS-TC tops out at 229 TFLOP/s (an
+   sm_80-style `cutlass_80_tensorop` kernel). The H100 ceiling is **3.3× higher** in absolute
+   terms.
+2. **Our kernel cannot follow it.** The WMMA API lowers to per-warp `mma.sync` instructions.
+   On Hopper, `mma.sync` cannot reach the Tensor Core peak — that requires `wgmma.mma_async`
+   (warpgroup MMA, 128 threads cooperating, operands fed from shared memory). This is a
+   documented architectural property, not a tuning gap: Hopper microbenchmark studies
+   (arXiv:2402.13499, arXiv:2501.12084) measure the `mma`-path far below the `wgmma`-path,
+   and worked H100 GEMM examples show WMMA-only kernels plateau near ~10% of peak regardless
+   of tiling effort.
+
+`ncu --set full` on both kernels at 8192³ quantifies the gap (full table in
+`results/nsys_profile.md`):
+
+| metric (ncu, 8192³) | `gemm_wmma_t<128,128,3>` (ours) | `nvjet_sm90` (cuBLAS-TC) |
+|---|---|---|
+| Duration | 22.9 ms | 1.56 ms |
+| SM compute throughput | 26.7% | **91.9%** |
+| DRAM throughput | 6.2% | 28.9% |
+| Achieved occupancy | 49.4% | **14.8%** |
+| Registers / thread | 64 | 168 |
+| Top stall reason | MIO queue full (shared-mem traffic) | WARPGROUP.ARRIVES (wgmma sync) |
+
+The signature is unmistakable: the winning kernel runs at **low occupancy with huge register
+state and near-peak tensor utilization** (the warpgroup model), while the WMMA kernel burns its
+issue slots on shared-memory `ld`/`st` (MIO stalls) feeding fragments to `mma.sync` — high
+occupancy, low utilization.
+
+**What transfers across generations and what doesn't:** the optimization *story* (tiling,
+`cp.async` pipelining, register tiling) transfers — the kernel's absolute TFLOP/s is nearly
+identical on both cards (103 vs 61 TFLOP/s, the difference tracking SM count × clock for
+`mma.sync`-issue-bound code). What does **not** transfer is the *fraction of the ceiling*:
+each architecture generation moves the ceiling behind a new instruction (Volta `mma.sync` →
+Ampere `mma.sync`+`cp.async` → Hopper `wgmma`+TMA → Blackwell `tcgen05`), and a kernel written
+against the previous generation's abstraction silently keeps its absolute speed while losing
+its relative one. That is the actual lesson an SA needs when a partner asks "why is my custom
+kernel slow on the new GPUs?"
 
 > ### On the two cuBLAS baselines (read before quoting any "% of cuBLAS")
 > **% of FP32 cuBLAS** (e.g. 1125% @ 512, 189% @ 8192) compares **FP16-on-Tensor-Cores WMMA** against

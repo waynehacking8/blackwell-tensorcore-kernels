@@ -147,7 +147,37 @@ tile, and our WMMA is *not* slow at 1024. The lower percentage comes from cuBLAS
 unusually fast there (~140 TFLOP/s), so the ratio dips even though our absolute throughput is
 healthy. The size-dispatch crossover (N≥1536 → 128×128) is therefore correct as set.
 
+## H100 (sm_90) cross-check — does any of this transfer?
+
+The roadmap question: does the 45.2%-of-cuBLAS-TC result (and the tile/pipeline choices behind
+it) transfer from sm_120 to H100? Measured (`ARCH=90 make bench` on one idle GPU of an 8×H100
+box):
+
+| check | sm_120 | sm_90 (H100) | verdict |
+|---|---|---|---|
+| WMMA absolute TFLOP/s @8192 | 103.5 | 60.9 | ratio ≈ SM count × clock (188 SM @ ~2.6 GHz vs 132 SM @ ~1.98 GHz) — `mma.sync`-issue-bound code scales with issue slots, as expected |
+| cuBLAS-TC ceiling @8192 | 229.2 (`cutlass_80_tensorop`) | 761.7 (`nvjet_sm90`, wgmma) | H100's ceiling is 3.3× higher *and* uses a different instruction class |
+| **WMMA % of cuBLAS-TC** | **45.2%** | **8.0%** | **does NOT transfer** |
+| cuBLAS-TC % of card's FP16 peak | ~92% of ~250 | ~77% of 989 | both ceilings are honest |
+| FP32 `cublasSgemm` dispatches sm_80 FFMA kernel | yes | yes | the "baseline is an sm_80 kernel" statement holds on both — no scoping needed |
+| max abs err (wmma, 8192) | 0.0112 | 0.0112 | bit-identical rounding behavior — same code, same math |
+
+**Why the % collapses (cross-checked against literature):** Hopper's Tensor Core peak is only
+reachable via `wgmma.mma_async` (warpgroup MMA, async, operands fed from shared memory). The
+WMMA API lowers to per-warp `mma.sync` and cannot emit `wgmma`. Hopper microbenchmark papers
+measure exactly this split: ["Benchmarking and Dissecting the Nvidia Hopper GPU
+Architecture"](https://arxiv.org/abs/2402.13499) and ["Dissecting the NVIDIA Hopper Architecture
+through Microbenchmarking"](https://arxiv.org/abs/2501.12084) both find the `mma`-path far below
+the `wgmma`-path; worked H100 GEMM optimization logs (e.g. Hamza El-Shafie's cuBLAS-chasing
+worklog) show WMMA-only kernels plateau around ~10% of peak regardless of tiling effort. Our
+8.0% measurement sits exactly in that band — the *measured* confirmation of a documented
+architectural property, plus the ncu evidence (`results/nsys_profile.md`, H100 section) showing
+*where* the cycles go: MIO/shared-memory stalls feeding `mma.sync` vs `wgmma` reading shared
+memory directly.
+
 ## Sources
+- [Benchmarking and Dissecting the Nvidia Hopper GPU Architecture (arXiv:2402.13499)](https://arxiv.org/abs/2402.13499) — Hopper `wgmma` vs `mma` Tensor Core paths.
+- [Dissecting the NVIDIA Hopper Architecture through Microbenchmarking (arXiv:2501.12084)](https://arxiv.org/abs/2501.12084) — instruction-level Hopper TC analysis.
 - [RTX PRO 6000 Blackwell — NVIDIA](https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-6000/)
 - [RTX PRO 6000 Blackwell spec sheet — flopper.io](https://flopper.io/gpu/nvidia-rtx-pro-6000-blackwell-workstation-edition)
 - [NVIDIA RTX Blackwell PRO GPU Architecture (v1.0 PDF)](https://www.nvidia.com/content/dam/en-zz/Solutions/design-visualization/quadro-product-literature/NVIDIA-RTX-Blackwell-PRO-GPU-Architecture-v1.0.pdf)

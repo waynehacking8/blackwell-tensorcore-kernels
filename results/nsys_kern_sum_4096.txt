@@ -1,0 +1,16 @@
+Generating SQLite file results/nsys_4096.sqlite from results/nsys_4096.nsys-rep
+Processing [results/nsys_4096.sqlite] with [/usr/local/cuda-13.1/NsightSystems-cli-2026.1.1/target-linux-x64/reports/cuda_gpu_kern_sum.py]... 
+
+ ** CUDA GPU Kernel Summary (cuda_gpu_kern_sum):
+
+ Time (%)  Total Time (ns)  Instances   Avg (ns)    Med (ns)   Min (ns)  Max (ns)  StdDev (ns)                                                  Name                                                
+ --------  ---------------  ---------  ----------  ----------  --------  --------  -----------  ----------------------------------------------------------------------------------------------------
+     55.1        280846164         11  25531469.5  25526076.0  25500572  25564988      22710.2  gemm_naive(const float *, const float *, float *, int, int, int)                                    
+     32.6        166111932         11  15101084.7  15101696.0  15094912  15105280       3036.6  gemm_tiled(const float *, const float *, float *, int, int, int)                                    
+      6.1         31299223         12   2608268.6   2604287.0   2602959   2647407      12488.2  sm80_xmma_gemm_f32f32_f32f32_f32_nn_n_tilesize256x128x8_stage3_warpsize4x2x1_ffma_aligna4_alignc4_e…
+      5.0         25442046         11   2312913.3   2312881.0   2312113   2314097        629.3  void gemm_wmma_t<(int)128, (int)128, (int)3>(const __half *, const __half *, float *, int, int, int)
+      0.7          3696968         11    336088.0    335422.0    334333    340286       1850.2  sm90_xmma_gemm_f32f32_tf32f32_f32_nn_n_tilesize128x256x32_warpgroupsize2x1x1_execute_segment_k_off_…
+      0.4          2004755         11    182250.5    182366.0    180095    185375       1371.5  nvjet_sm90_hss_256x128_64x4_1x2_h_bz_coopA_NNT                                                      
+      0.0           112735          2     56367.5     56367.5     56064     56671        429.2  f2h_tc(const float *, __half *, int)                                                                
+      0.0           111648          2     55824.0     55824.0     54400     57248       2013.8  f2h(const float *, __half *, int)                                                                   
+

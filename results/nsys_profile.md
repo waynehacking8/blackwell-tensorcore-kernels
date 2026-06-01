@@ -131,3 +131,79 @@ Ampere-style (sm_80) cp.async multistage code that uses neither. The gap comes f
 128×64 CTA tile, deeper register-level warp/thread tiling, vectorized loads, swizzle/rasterization,
 and more aggressive multistage cp.async pipelining — consistent with Boehm's published ablation
 reaching ~94% of cuBLAS with tiling alone. See `VALIDATION.md` and the References for sources.
+
+---
+
+# H100 (sm_90) — the cross-generation profile
+
+Capture: same binary built with `ARCH=90`, run on one idle GPU of an 8×H100 SXM5 box
+(`nvcr.io/nvidia/pytorch:26.02-py3`, CUDA 13.1). `nsys` kernel summary + `ncu --set full` on
+both our kernel and cuBLAS's FP16-TC kernel at 8192³. Reproduce:
+`ARCH=90 bash scripts/run_bench.sh && bash scripts/profile.sh 8192`.
+
+## GPU kernel summary (nsys, M=N=K=8192)
+
+| kernel (as nsys names it) | avg ms | TFLOP/s | role |
+|---|---|---|---|
+| `gemm_naive` | 214.1 | 5.1 | one-thread-per-output baseline |
+| `gemm_tiled` | 120.8 | 9.1 | shared-mem + register block |
+| **`gemm_wmma_t<128,128,3>`** | **18.2** | **60.4** | our v3 WMMA kernel (same source as sm_120) |
+| `sm80_xmma_gemm_f32f32_..._ffma` | 21.1 | 52.1 | FP32 `cublasSgemm` — **still an sm_80 FFMA kernel, even on H100** |
+| `sm90_xmma_gemm_f32f32_tf32f32_...warpgroupsize2x1x1` | 2.64 | 416.6 | TF32 `cublasGemmEx` — sm_90 **warpgroup** kernel |
+| **`nvjet_sm90_hss_320x128_64x3_1x2_h_bz_coopB_NNT`** | **1.44** | **762.9** | FP16-TC `cublasGemmEx` — Hopper-native **wgmma** kernel |
+
+Two dispatch facts that settle open questions from the sm_120 profile:
+
+1. **The FP32 cuBLAS baseline dispatches an sm_80 FFMA kernel on H100 too** — so the
+   "the FP32 baseline is an sm_80-style kernel" statement in `VALIDATION.md` holds on both
+   architectures and does not need scoping.
+2. **The FP16-TC ceiling on H100 is a completely different beast**: `nvjet_sm90` (cuBLAS 12.9+'s
+   JIT-generated kernel family) uses `wgmma` warpgroup MMA + TMA and reaches 762 TFLOP/s ≈ 77% of
+   H100's 989 TFLOP/s FP16 dense peak. On sm_120, the ceiling kernel was an sm_80-style
+   `cutlass_80_tensorop` at 229 TFLOP/s.
+
+## ncu — why WMMA cannot follow the Hopper ceiling (8192³, `--set full`)
+
+| metric | `gemm_wmma_t<128,128,3>` (ours) | `nvjet_sm90` (cuBLAS FP16-TC) |
+|---|---|---|
+| Duration (under ncu) | 22.9 ms | 1.56 ms |
+| Compute (SM) throughput | 26.7% | **91.9%** |
+| Memory (L1/shared) throughput | 90.5% | 93.5% |
+| DRAM throughput | 6.2% | 28.9% |
+| Achieved occupancy | 49.4% | **14.8%** |
+| Registers / thread | 64 | 168 |
+| Top stall | MIO queue full (35.9% of issue gap) | WARPGROUP.ARRIVES |
+
+Reading the two columns side by side:
+
+- **Ours**: 90% "memory throughput" with only 6% DRAM traffic = the bottleneck is the
+  **shared-memory/MIO pipe**, not HBM. Every `mma.sync` operand must round-trip through
+  registers via shared-memory loads issued by the same warps that do the math — at 8192³ the
+  MIO instruction queue saturates and Tensor Cores starve (26.7% utilization).
+- **cuBLAS nvjet**: the *opposite* shape. 14.8% occupancy (huge register state per thread,
+  168 regs), warps stall only on `WARPGROUP.ARRIVES` (the wgmma async handshake), and the
+  tensor pipe runs at 92%. `wgmma` reads its operands **directly from shared memory,
+  asynchronously** — the feeding work that saturates our MIO pipe simply does not exist as
+  warp instructions.
+
+This is the quantified version of the architectural statement: **on Hopper, the Tensor Core
+peak is only reachable via `wgmma.mma_async`** (warpgroup MMA). The WMMA API lowers to
+`mma.sync` and cannot emit it. Microbenchmark literature measures the same thing
+(arXiv:2402.13499 §Tensor-Core ISA, arXiv:2501.12084): the `mma`-path tops out at a small
+fraction of the `wgmma`-path on H100.
+
+## The cross-generation summary (same source code, both cards)
+
+| | RTX Pro 6000 (sm_120) | H100 (sm_90) |
+|---|---|---|
+| our WMMA kernel | 103.5 TFLOP/s | 60.9 TFLOP/s |
+| cuBLAS FP16-TC ceiling | 229.2 TFLOP/s (`cutlass_80_tensorop`) | 761.7 TFLOP/s (`nvjet_sm90` wgmma) |
+| **WMMA % of ceiling** | **45.2%** | **8.0%** |
+| ceiling % of card's FP16 peak | ~92% of ~250 TFLOP/s | ~77% of 989 TFLOP/s |
+
+The kernel's *absolute* speed difference (103 vs 61 TFLOP/s) tracks what `mma.sync`-issue-bound
+code should do — the RTX Pro 6000 has more SMs (188 vs 132) at higher clocks. The *relative*
+collapse (45% → 8%) is entirely the ceiling moving: each GPU generation hides its Tensor Core
+peak behind a new instruction (Ampere `mma.sync`+`cp.async` → Hopper `wgmma`+TMA → Blackwell
+`tcgen05`), and code written against the previous abstraction keeps its absolute speed while
+silently losing its relative one.
