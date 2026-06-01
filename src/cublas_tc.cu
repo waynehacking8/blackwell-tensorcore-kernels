@@ -28,7 +28,12 @@ void launch_cublas_tc(const float*A,const float*B,float*C,int M,int N,int K){
   if(A!=cA){ int n=M*K; f2h_tc<<<(n+255)/256,256>>>(A,Ah,n); cA=A; }
   if(B!=cB){ int n=K*N; f2h_tc<<<(n+255)/256,256>>>(B,Bh,n); cB=B; }
 
-  cublasHandle_t h; cublasCreate(&h);
+  // Create the cuBLAS handle ONCE (like Ah/Bh above). cublasCreate/Destroy on
+  // every timed call dominates at small N (the GEMM is only tens of µs there),
+  // which unfairly slowed cuBLAS-TC vs the no-handle WMMA kernel. The handle is
+  // reused for the process lifetime; the OS reclaims it at exit.
+  static cublasHandle_t h=nullptr;
+  if(!h) cublasCreate(&h);
   float al=1.f,be=0.f;
   // cuBLAS is column-major: compute C^T = B^T A^T by swapping args, matching
   // reference.cu. Output stays FP32 (CUDA_R_32F) so the correctness check and
@@ -39,5 +44,4 @@ void launch_cublas_tc(const float*A,const float*B,float*C,int M,int N,int K){
                &be,
                C,CUDA_R_32F,N,
                CUBLAS_COMPUTE_32F,CUBLAS_GEMM_DEFAULT);
-  cublasDestroy(h);
 }
