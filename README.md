@@ -111,16 +111,16 @@ cuBLAS FP16-TC ceiling):
 
 Read the **% of cuBLAS-TC** column — the honest same-precision (FP16-in/FP32-acc, Tensor Core)
 ceiling. Across two optimization passes (shared-mem + cp.async, then register tiling + deeper
-pipeline + size dispatch) the WMMA kernel went from a naive **17.3%** to **45.0%** of cuBLAS-TC
+pipeline + size dispatch) the WMMA kernel went from a naive **17.3%** to **45.2%** of cuBLAS-TC
 at 8192 (1.64× the single-buffer version), and no longer decays at scale. Pipeline depth is
 tuned (3 stages > 4 > 5) and **warp specialization was tried but did not beat the multi-stage
 pipeline** — see `results/nsys_profile.md` for the full before/after and the WS experiment.
 The **% of FP32 cuBLAS** column is precision-mismatched (kept for continuity); its `>100%` rows
-are FP16-TC vs FP32-CUDA-core, not the kernel beating cuBLAS. `cublas_tc` is 4.2–21× faster than
+are FP16-TC vs FP32-CUDA-core, not the kernel beating cuBLAS. `cublas_tc` is 4.2–23× faster than
 `cublasSgemm`, confirming the Tensor Core path.
 
 > ### On the two cuBLAS baselines (read before quoting any "% of cuBLAS")
-> **% of FP32 cuBLAS** (e.g. 1097% @ 512, 114% @ 8192) compares **FP16-on-Tensor-Cores WMMA** against
+> **% of FP32 cuBLAS** (e.g. 1125% @ 512, 189% @ 8192) compares **FP16-on-Tensor-Cores WMMA** against
 > **`cublasSgemm` FP32 on CUDA cores** — precision-mismatched, **not** a Tensor Core ceiling; a `>100%`
 > row reflects that mismatch (plus small-size launch overhead), not a kernel beating cuBLAS.
 > **% of cuBLAS-TC** compares against **`cublas_tc` (`cublasGemmEx`, FP16 in / FP32 accumulate)** in
