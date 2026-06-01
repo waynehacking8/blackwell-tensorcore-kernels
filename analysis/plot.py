@@ -75,9 +75,13 @@ def main():
             ax.get_xaxis().set_major_formatter(plt.matplotlib.ticker.ScalarFormatter())
             ax.set_xlabel("matrix size  M=N=K"); ax.set_ylabel("throughput (TFLOP/s)")
             ax.set_title(f"GEMM throughput — {short} (sm_{sm})\nFP32 → TF32 → FP16 precision ladder, all on one card")
-            ax.legend(fontsize=8, framealpha=.9); ax.grid(True, alpha=.3)
+            # legend below the axes so it can never overlap the data lines
+            leg = ax.legend(fontsize=8, framealpha=1.0, loc="upper center",
+                            bbox_to_anchor=(0.5, -0.13), ncol=3)
+            ax.grid(True, alpha=.3)
             p1 = f"tflops_sm{sm}.png"
-            fig.tight_layout(); fig.savefig(os.path.join(HERE,"results",p1), dpi=140); plt.close(fig)
+            fig.savefig(os.path.join(HERE,"results",p1), dpi=140,
+                        bbox_inches="tight", bbox_extra_artists=[leg]); plt.close(fig)
 
             # ---- Chart 2: % of cuBLAS-TC (same-precision ceiling) ----
             tc = {s: tf for (s, tf, *_ ) in sorted(kerns.get("cublas_tc", []))}
@@ -92,9 +96,14 @@ def main():
             ax.get_xaxis().set_major_formatter(plt.matplotlib.ticker.ScalarFormatter())
             ax.set_xlabel("matrix size  M=N=K"); ax.set_ylabel("% of cuBLAS FP16-TC (same precision)")
             ax.set_title(f"Fraction of the honest Tensor Core ceiling — {short} (sm_{sm})")
-            ax.legend(fontsize=8, framealpha=.9); ax.grid(True, alpha=.3)
+            ax.set_ylim(0, 112)  # headroom so the 100% ceiling line sits clear of the frame
+            # legend below the axes so the 100% dashed line never crosses it
+            leg = ax.legend(fontsize=8, framealpha=1.0, loc="upper center",
+                            bbox_to_anchor=(0.5, -0.13), ncol=3)
+            ax.grid(True, alpha=.3)
             p2 = f"pct_tc_sm{sm}.png"
-            fig.tight_layout(); fig.savefig(os.path.join(HERE,"results",p2), dpi=140); plt.close(fig)
+            fig.savefig(os.path.join(HERE,"results",p2), dpi=140,
+                        bbox_inches="tight", bbox_extra_artists=[leg]); plt.close(fig)
 
             # ---- Chart 3: TFLOP/s bar at largest size (precision ladder) ----
             fig, ax = plt.subplots(figsize=(8, 5))
