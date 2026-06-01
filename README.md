@@ -4,8 +4,7 @@ Hand-written CUDA GEMM kernels targeting **Tensor Cores**, benchmarked on both *
 (H100, sm_90)** and **Blackwell (RTX Pro 6000, sm_120)**, with a path toward Blackwell's
 FP8/FP4 microscaling formats.
 
-Extends my earlier kernel work (tiled GEMM, WMMA Tensor Core matmul, Nsight profiling) onto
-the newest architecture. The point is to connect kernel-level choices — tiling, Tensor Core
+The point is to connect kernel-level choices — tiling, Tensor Core
 fragment shapes, occupancy — to measured TFLOP/s as a fraction of the cuBLAS ceiling, on real
 Hopper and Blackwell silicon.
 
@@ -16,7 +15,7 @@ Hopper and Blackwell silicon.
   profiled across two generations.
 
 ## What this is NOT
-- Not a cuBLAS replacement — cuBLAS is the ceiling we measure against, honestly.
+- Not a cuBLAS replacement — cuBLAS is the ceiling measured against, honestly.
 - Not yet FP4 — Blackwell 5th-gen Tensor Core FP4/MXFP8 (tcgen05) is the documented frontier in
   the roadmap, built on top of the working FP16 WMMA kernel.
 
@@ -70,3 +69,10 @@ bash scripts/profile.sh 4096                           # ncu + nsys for gemm_wmm
 - `report.md` — the summary table + charts.
 
 **(populated after running on the GPUs)**
+
+## References
+- [NVIDIA CUTLASS](https://github.com/NVIDIA/cutlass) — the production reference for Tensor Core GEMM.
+- [WMMA API (CUDA C++ Programming Guide)](https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#wmma) — the API used by `gemm_wmma.cu`.
+
+## Disclaimer
+Personal project for learning and benchmarking. Views and results are my own and do not represent any employer.
