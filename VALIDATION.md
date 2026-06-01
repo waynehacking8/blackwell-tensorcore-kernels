@@ -51,9 +51,19 @@ At M=N=K=8192 (the most timing-stable point):
 |---|---|---|---|---|---|
 | naive | 4.8 | 8.7% | 2.1% | 0 | one-thread-per-output, no reuse — expected floor |
 | tiled | 7.3 | 13.4% | 3.2% | 0 | shared-mem + register block, ~1.5× naive |
-| **wmma** | 102.7 | 188% † | **45.0%** | 0.011 | 128×128 reg-tiled + 3-stage cp.async, FP16-in/FP32-acc TC |
-| cublas | 54.7 | 100% | 23.9% | 0 | FP32 baseline (cublasSgemm, CUDA cores) |
-| **cublas_tc** | 228.4 | 418% † | **100%** | 0.011 | FP16/FP32-acc Tensor Core ceiling (cublasGemmEx) |
+| **wmma** | 103.5 | 189% † | **45.2%** | 0.011 | 128×128 reg-tiled + 3-stage cp.async, FP16-in/FP32-acc TC |
+| cublas | 54.8 | 100% | 23.9% | 0 | FP32 baseline (cublasSgemm, CUDA cores) |
+| cublas_tf32 | 152.7 | 278% † | 66.6% | 0.0113 | TF32 Tensor Core rung (cublasGemmEx, FP32 in / TF32 compute) |
+| **cublas_tc** | 229.2 | 418% † | **100%** | 0.011 | FP16/FP32-acc Tensor Core ceiling (cublasGemmEx) |
+
+> **Precision-ladder sanity (FP32→TF32→FP16, all same card):** throughput is strictly
+> monotone at every size — FP32 54.8 < TF32 152.7 < FP16 229.2 TFLOP/s @8192 — and the
+> intermediate TF32 rung lands cleanly between the CUDA-core baseline and the FP16 ceiling,
+> exactly as the hardware predicts. **Notable (verified) detail:** TF32 and FP16 have the
+> *same* max-abs-err (~0.011) **and** the same mean-abs-err (0.001111 vs 0.001111 @4096) — not
+> a bug: TF32 and FP16 both carry a **10-bit mantissa**, so on well-conditioned [-0.5,0.5]
+> inputs with FP32 accumulation the rounding error is identical; TF32's advantage is its wider
+> 8-bit exponent (range), which this benign test doesn't exercise.
 
 > **% of cuBLAS-TC** is the honest same-precision ceiling (vs `cublasGemmEx`, FP16 in / FP32
 > acc, Tensor Cores). **% of FP32 cuBLAS** is vs `cublasSgemm` (FP32, CUDA cores) and is

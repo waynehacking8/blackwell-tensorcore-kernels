@@ -14,8 +14,9 @@
 void launch_naive    (const float*,const float*,float*,int,int,int);
 void launch_tiled    (const float*,const float*,float*,int,int,int);
 void launch_wmma     (const float*,const float*,float*,int,int,int);
-void launch_cublas   (const float*,const float*,float*,int,int,int); // cublasSgemm  (FP32, CUDA cores)
-void launch_cublas_tc(const float*,const float*,float*,int,int,int); // cublasGemmEx (FP16 in / FP32 acc, Tensor Cores)
+void launch_cublas    (const float*,const float*,float*,int,int,int); // cublasSgemm  (FP32, CUDA cores)
+void launch_cublas_tf32(const float*,const float*,float*,int,int,int);// cublasGemmEx (FP32 in, TF32 compute, Tensor Cores)
+void launch_cublas_tc (const float*,const float*,float*,int,int,int); // cublasGemmEx (FP16 in / FP32 acc, Tensor Cores)
 
 struct Kern{ const char* name; void(*fn)(const float*,const float*,float*,int,int,int); };
 
@@ -36,10 +37,12 @@ int main(int argc,char**argv){
   launch_cublas(dA,dB,dC,M,N,K); CUDA_CHECK(cudaDeviceSynchronize());
   CUDA_CHECK(cudaMemcpy(hRef.data(),dC,szC,cudaMemcpyDeviceToHost));
 
-  // "cublas"    = cublasSgemm  (FP32, CUDA cores)        — legacy / precision-mismatched baseline
-  // "cublas_tc" = cublasGemmEx (FP16 in / FP32 acc, TC)  — same-precision honest ceiling for wmma
+  // precision ladder, all on the same card:
+  //   "cublas"      = cublasSgemm  (FP32, CUDA cores)            — non-TC baseline
+  //   "cublas_tf32" = cublasGemmEx (FP32 in, TF32 compute, TC)   — TF32 Tensor Core rung
+  //   "cublas_tc"   = cublasGemmEx (FP16 in / FP32 acc, TC)      — FP16 Tensor Core ceiling
   Kern kerns[]={{"naive",launch_naive},{"tiled",launch_tiled},{"wmma",launch_wmma},
-                {"cublas",launch_cublas},{"cublas_tc",launch_cublas_tc}};
+                {"cublas",launch_cublas},{"cublas_tf32",launch_cublas_tf32},{"cublas_tc",launch_cublas_tc}};
   struct Row{ const char* name; float ms, tf; double err; };
   std::vector<Row> rows;
   std::vector<float> hC(M*N);

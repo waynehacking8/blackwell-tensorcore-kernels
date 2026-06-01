@@ -9,12 +9,22 @@ fragment shapes, occupancy — to measured TFLOP/s as a fraction of the cuBLAS c
 Hopper and Blackwell silicon.
 
 ## What this is
-- A naive baseline, a shared-memory tiled GEMM, and a **WMMA Tensor Core** GEMM (FP16 accumulate FP32).
-- A harness that checks correctness against cuBLAS and reports **TFLOP/s and % of the cuBLAS ceiling**.
-  Two cuBLAS baselines: **`cublas`** = `cublasSgemm` (FP32, CUDA cores) and **`cublas_tc`** =
-  `cublasGemmEx` (FP16 in / FP32 accumulate, Tensor Cores — the same precision as the WMMA kernel).
-- Builds for **sm_90 (H100)** and **sm_120 (Blackwell RTX Pro 6000)** so the same kernels are
+- A naive baseline, a shared-memory tiled GEMM, and a **WMMA Tensor Core** GEMM (FP16 in / FP32 accumulate).
+- A harness that checks correctness against cuBLAS and reports **TFLOP/s and % of the cuBLAS ceiling**,
+  across a **precision ladder** of cuBLAS baselines on the same card:
+  **`cublas`** = `cublasSgemm` (FP32, CUDA cores) → **`cublas_tf32`** = `cublasGemmEx` (FP32 in,
+  TF32 compute, Tensor Cores) → **`cublas_tc`** = `cublasGemmEx` (FP16 in / FP32 acc, Tensor Cores —
+  the same precision as the WMMA kernel, hence the honest ceiling).
+- Builds for **sm_90 (H100)** and **sm_120 (Blackwell RTX Pro 6000)** so the same kernels *can* be
   profiled across two generations.
+
+> **Measurement status:** all numbers in this repo were captured on a single **Blackwell
+> RTX PRO 6000 Max-Q (sm_120)** box — the only GPU available here. The **sm_90 (H100) line is not
+> populated** (no H100 on hand; sm_90 code can't run on sm_120 silicon, and fabricating numbers
+> would defeat the point). The cross-generation comparison is wired and ready — run
+> `ARCH=90 make bench` on any H100 box and the rows accumulate into the same `bench.csv`. In its
+> place, the **precision ladder above (FP32→TF32→FP16, all real, same card)** gives a genuine
+> apples-to-apples comparison of what the Blackwell Tensor Cores do at each precision.
 
 ## What this is NOT
 - Not a cuBLAS replacement — cuBLAS is the ceiling measured against, honestly.
@@ -68,23 +78,36 @@ bash scripts/profile.sh 4096                           # ncu + nsys for gemm_wmm
 
 - `bench.csv` — per kernel × size × GPU: ms, TFLOP/s, **% of FP32 cuBLAS** (`pct_of_cublas`,
   vs `cublasSgemm`), max abs err. Now includes a `cublas_tc` row per size.
-- `tflops_sm90.png` / `tflops_sm120.png` — throughput vs size (Hopper vs Blackwell).
+- `tflops_sm120.png`, `pct_tc_sm120.png`, `roofline_sm120.png` — the three charts below.
 - `ncu_wmma_*.ncu-rep`, `nsys_*.nsys-rep` — Nsight Compute / Systems captures.
-- `report.md` — the summary table (now with both **% of FP32 cuBLAS** and **% of cuBLAS-TC**) + charts.
+- `report.md` — the summary table (both **% of FP32 cuBLAS** and **% of cuBLAS-TC**) + charts.
 
 ### Measured on RTX PRO 6000 Blackwell Max-Q (sm_120, CUDA 12.8)
 
+**Throughput across the precision ladder (FP32 → TF32 → FP16, all real, one card):**
+
+![GEMM throughput vs size](results/tflops_sm120.png)
+
+**Each kernel as a fraction of the honest same-precision ceiling (cuBLAS FP16-TC = 100%):**
+
+![% of cuBLAS-TC](results/pct_tc_sm120.png)
+
+**Throughput at the largest (most steady-state) size, M=N=K=8192:**
+
+![throughput bar at 8192](results/roofline_sm120.png)
+
 The `gemm_wmma` kernel is shared-memory tiled with per-warp 2×2 register tiling and a 3-stage
 `cp.async` pipeline, **size-dispatched**: 64×64 tile for N<1536 (better occupancy), 128×128 tile
-for N≥1536 (more reuse). TFLOP/s and its fraction of **both** baselines:
+for N≥1536 (more reuse). Numbers at each size (TFLOP/s and fraction of the **same-precision**
+cuBLAS FP16-TC ceiling):
 
-| size | wmma | tile | cublas_tc (TC) | cublas (FP32) | wmma % of FP32 cuBLAS | **wmma % of cuBLAS-TC** | cublas_tc speedup |
-|---|---|---|---|---|---|---|---|
-| 512  | 16.08 | 64×64   | 33.80  | 1.49  | 1097% | 47.6% | 21.3× |
-| 1024 | 38.72 | 64×64   | 123.27 | 9.80  | 371%  | 31.4% | 14.3× |
-| 2048 | 68.64 | 128×128 | 215.66 | 37.57 | 151%  | 32.0% | 5.7× |
-| 4096 | 96.57 | 128×128 | 238.95 | 52.89 | 118%  | 40.7% | 4.5× |
-| 8192 | 102.7 | 128×128 | 228.40 | 54.42 | 188%  | **45.0%** | 4.2× |
+| size | wmma | tf32-TC | cublas_tc (FP16-TC) | **wmma % of cuBLAS-TC** | tf32 % of cuBLAS-TC |
+|---|---|---|---|---|---|
+| 512  | 16.2 | 28.0  | 33.3  | 48.7% | 84.0% |
+| 1024 | 38.7 | 89.7  | 137.1 | 28.2% | 65.5% |
+| 2048 | 68.7 | 131.3 | 215.7 | 31.8% | 60.9% |
+| 4096 | 96.3 | 146.7 | 238.2 | 40.4% | 61.6% |
+| 8192 | 103.5 | 152.7 | 229.2 | **45.2%** | 66.6% |
 
 Read the **% of cuBLAS-TC** column — the honest same-precision (FP16-in/FP32-acc, Tensor Core)
 ceiling. Across two optimization passes (shared-mem + cp.async, then register tiling + deeper
