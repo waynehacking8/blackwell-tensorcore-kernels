@@ -72,6 +72,46 @@ the end-to-end 26.4% from `bench.csv`, so the harness stays clean.
 The biggest gain is at the **largest** size (1.58× @ 8192), exactly where the naive kernel was
 memory-bound: naive WMMA *fell back* to 39.8 TFLOP/s at 8192, while the pipelined version
 **holds ~63 TFLOP/s** and no longer decays — confirming the bottleneck was global-memory
-traffic, not the Tensor Core math, as the profile predicted. Remaining gap to cuBLAS (~27% vs
-100%) is the deeper pipeline (cuBLAS uses 3+ stages, register-level tiling, and a larger
-128×64 CTA tile); closing it further would mean more pipeline stages and warp-specialization.
+traffic, not the Tensor Core math, as the profile predicted.
+
+## Optimization v2 → v3: register tiling + deeper pipeline + size dispatch
+
+Next, the kernel was templated on tile size and given **per-warp 2×2 register tiling** (each
+warp now owns a 32×32 region = four 16×16 accumulators, reusing every loaded fragment across
+the other warp axis) plus a **3-stage** pipeline, with a **128×128** tile for large N and the
+64×64 tile kept for small N (size dispatch at N≥1536, since the 128 tile under-occupies the GPU
+below that).
+
+| size | v2 (64×64, 2-stage) | **v3 (dispatch)** | tile used | speedup | **% of cuBLAS-TC** |
+|---|---|---|---|---|---|
+| 512  | 16.12 | 16.08 | 64×64  | 1.00× | 47.6% |
+| 1024 | 40.05 | 38.72 | 64×64  | 0.97× | 31.4% |
+| 2048 | 56.03 | 68.64 | 128×128 | 1.23× | 32.0% |
+| 4096 | 62.99 | 96.57 | 128×128 | 1.53× | 40.7% |
+| 8192 | 62.65 | 102.7 | 128×128 | **1.64×** | **45.0%** |
+
+nsys @4096: `gemm_wmma_t<128,128,3>` = **1425 µs** (vs v2's 2180 µs, vs cuBLAS tensorop 575 µs)
+→ **40.3% of cuBLAS-TC kernel-only**, matching end-to-end 40.7%. Overall the WMMA kernel went
+**17.3% → 45.0%** of the same-precision Tensor Core ceiling at 8192 across the two optimizations.
+
+**Pipeline depth is tuned, not arbitrary** — measured at 8192: 3 stages 103 TFLOP/s, 4 stages
+95, 5 stages 88. Past 3, the larger shared-memory footprint costs more occupancy than the extra
+prefetch buys, so 3 is the sweet spot.
+
+## Warp specialization — tried, did NOT help (kept honest)
+
+A warp-specialized variant (`experiments/wmma_ws_probe.cu`: 16 consumer warps doing mma + 4
+dedicated producer warps doing all `cp.async`, synced via `bar.arrive/bar.sync` named barriers)
+was implemented and benchmarked head-to-head:
+
+| size | dispatch (multi-stage) | warp-specialized | result |
+|---|---|---|---|
+| 4096 | 96.6 | 97.4 | ~tie (+0.8%) |
+| 8192 | 103.2 | 95.4 | **WS 7.6% slower** |
+
+It did not beat the plain multi-stage pipeline, consistent with the depth sweep above: at this
+512-thread / 128×128 tile the `cp.async` pipeline already saturates latency-hiding, so peeling
+4 warps off for production just removes them from mma throughput (and adds barrier cost). Warp
+specialization pays off on Hopper-style persistent/TMA kernels with much larger tiles and
+async-transaction barriers — not here. The probe is kept under `experiments/` (own `main()`,
+not in the build) for reproducibility; the shipped kernel is the multi-stage dispatch one.

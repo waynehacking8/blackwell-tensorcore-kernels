@@ -74,24 +74,27 @@ bash scripts/profile.sh 4096                           # ncu + nsys for gemm_wmm
 
 ### Measured on RTX PRO 6000 Blackwell Max-Q (sm_120, CUDA 12.8)
 
-The `gemm_wmma` kernel is shared-memory tiled (64×64, BK=32) with a 2-stage `cp.async`
-double-buffered pipeline. TFLOP/s and its fraction of **both** baselines:
+The `gemm_wmma` kernel is shared-memory tiled with per-warp 2×2 register tiling and a 3-stage
+`cp.async` pipeline, **size-dispatched**: 64×64 tile for N<1536 (better occupancy), 128×128 tile
+for N≥1536 (more reuse). TFLOP/s and its fraction of **both** baselines:
 
-| size | wmma | cublas_tc (TC) | cublas (FP32) | wmma % of FP32 cuBLAS | **wmma % of cuBLAS-TC** | cublas_tc speedup vs FP32 |
-|---|---|---|---|---|---|---|
-| 512  | 16.12 | 32.58  | 1.49  | 1097% | 49.5% | 21.3× |
-| 1024 | 40.05 | 140.10 | 9.80  | 371%  | 28.6% | 14.3× |
-| 2048 | 56.03 | 213.95 | 37.57 | 151%  | 26.2% | 5.7× |
-| 4096 | 62.99 | 238.32 | 52.89 | 118%  | 26.4% | 4.5× |
-| 8192 | 62.65 | 229.32 | 54.42 | 114%  | **27.3%** | 4.2× |
+| size | wmma | tile | cublas_tc (TC) | cublas (FP32) | wmma % of FP32 cuBLAS | **wmma % of cuBLAS-TC** | cublas_tc speedup |
+|---|---|---|---|---|---|---|---|
+| 512  | 16.08 | 64×64   | 33.80  | 1.49  | 1097% | 47.6% | 21.3× |
+| 1024 | 38.72 | 64×64   | 123.27 | 9.80  | 371%  | 31.4% | 14.3× |
+| 2048 | 68.64 | 128×128 | 215.66 | 37.57 | 151%  | 32.0% | 5.7× |
+| 4096 | 96.57 | 128×128 | 238.95 | 52.89 | 118%  | 40.7% | 4.5× |
+| 8192 | 102.7 | 128×128 | 228.40 | 54.42 | 188%  | **45.0%** | 4.2× |
 
 Read the **% of cuBLAS-TC** column — the honest same-precision (FP16-in/FP32-acc, Tensor Core)
-ceiling. The pipelined WMMA kernel holds **~26–27%** of cuBLAS-TC at large sizes and, crucially,
-**no longer decays** at 8192 (the earlier naive version fell from 47→40 TFLOP/s there; see
-`results/nsys_profile.md` for the naive→optimized before/after — biggest gain 1.58× @ 8192).
-The **% of FP32 cuBLAS** column is kept for continuity but is precision-mismatched: its `>100%`
-rows are **not** the kernel beating cuBLAS, just FP16-TC vs FP32-CUDA-core. `cublas_tc` is
-4.2–21× faster than `cublasSgemm`, confirming it hits the Tensor Core path.
+ceiling. Across two optimization passes (shared-mem + cp.async, then register tiling + deeper
+pipeline + size dispatch) the WMMA kernel went from a naive **17.3%** to **45.0%** of cuBLAS-TC
+at 8192 (1.64× the single-buffer version), and no longer decays at scale. Pipeline depth is
+tuned (3 stages > 4 > 5) and **warp specialization was tried but did not beat the multi-stage
+pipeline** — see `results/nsys_profile.md` for the full before/after and the WS experiment.
+The **% of FP32 cuBLAS** column is precision-mismatched (kept for continuity); its `>100%` rows
+are FP16-TC vs FP32-CUDA-core, not the kernel beating cuBLAS. `cublas_tc` is 4.2–21× faster than
+`cublasSgemm`, confirming the Tensor Core path.
 
 > ### On the two cuBLAS baselines (read before quoting any "% of cuBLAS")
 > **% of FP32 cuBLAS** (e.g. 1097% @ 512, 114% @ 8192) compares **FP16-on-Tensor-Cores WMMA** against
@@ -99,8 +102,9 @@ rows are **not** the kernel beating cuBLAS, just FP16-TC vs FP32-CUDA-core. `cub
 > row reflects that mismatch (plus small-size launch overhead), not a kernel beating cuBLAS.
 > **% of cuBLAS-TC** compares against **`cublas_tc` (`cublasGemmEx`, FP16 in / FP32 accumulate)** in
 > `src/cublas_tc.cu` — same precision, same timing methodology (FP16 cast staged once outside the timed
-> loop; cuBLAS handle created once). Against this honest ceiling the pipelined WMMA lands at ~26–27% at
-> large sizes; the remaining gap to cuBLAS is its deeper (3+ stage) pipeline and larger 128×64 CTA tile.
+> loop; cuBLAS handle created once). Against this honest ceiling the optimized WMMA lands at ~45% at
+> large sizes; the remaining gap is cuBLAS's larger 128×64 CTA tile and warp-specialized/register-level
+> scheduling that a WMMA-fragment kernel can't fully match.
 
 ## References
 - [NVIDIA CUTLASS](https://github.com/NVIDIA/cutlass) — the production reference for Tensor Core GEMM.

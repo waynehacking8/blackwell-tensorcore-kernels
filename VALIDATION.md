@@ -21,27 +21,31 @@ At M=N=K=8192 (the most timing-stable point):
 |---|---|---|---|---|---|
 | naive | 4.8 | 8.7% | 2.1% | 0 | one-thread-per-output, no reuse — expected floor |
 | tiled | 7.3 | 13.4% | 3.2% | 0 | shared-mem + register block, ~1.5× naive |
-| **wmma** | 62.6 | 114% † | **27.3%** | 0.011 | shared-mem tiled + cp.async, FP16-in/FP32-acc TC |
+| **wmma** | 102.7 | 188% † | **45.0%** | 0.011 | 128×128 reg-tiled + 3-stage cp.async, FP16-in/FP32-acc TC |
 | cublas | 54.7 | 100% | 23.9% | 0 | FP32 baseline (cublasSgemm, CUDA cores) |
-| **cublas_tc** | 229.3 | 419% † | **100%** | 0.011 | FP16/FP32-acc Tensor Core ceiling (cublasGemmEx) |
+| **cublas_tc** | 228.4 | 418% † | **100%** | 0.011 | FP16/FP32-acc Tensor Core ceiling (cublasGemmEx) |
 
 > **% of cuBLAS-TC** is the honest same-precision ceiling (vs `cublasGemmEx`, FP16 in / FP32
 > acc, Tensor Cores). **% of FP32 cuBLAS** is vs `cublasSgemm` (FP32, CUDA cores) and is
 > precision-mismatched (**†**): WMMA and cublas_tc run FP16 on Tensor Cores, so their `>100%`
-> rows there (e.g. wmma 1097% @ 512, cublas_tc 419% @ 8192) are **not** kernels beating cuBLAS —
-> just FP16-TC vs FP32-CUDA-core. Against the same-precision cuBLAS-TC ceiling the (now
-> shared-mem + cp.async pipelined) WMMA kernel holds **~26–27%** at large sizes (27.3% @ 8192,
-> 26.4% @ 4096, 26.2% @ 2048, 28.6% @ 1024; 49.5% @ 512 is small-matrix launch overhead) and no
-> longer decays at 8192 — see the naive→optimized before/after in `results/nsys_profile.md`.
+> rows there (e.g. wmma 1097% @ 512, cublas_tc 418% @ 8192) are **not** kernels beating cuBLAS —
+> just FP16-TC vs FP32-CUDA-core. Against the same-precision cuBLAS-TC ceiling the optimized WMMA
+> kernel (size-dispatched: 64×64 for N<1536, 128×128 + 2×2 register tiling + 3-stage cp.async for
+> N≥1536) reaches **45.0% @ 8192** (40.7% @ 4096, 32.0% @ 2048; 31.4% @ 1024, 47.6% @ 512 on the
+> small-tile path) — see the naive→optimized→warp-spec progression in `results/nsys_profile.md`.
 
 - **WMMA against the honest same-precision ceiling.** Vs cuBLAS-TC (same FP16-in/FP32-acc
-  Tensor Core path), the WMMA kernel — after adding shared-memory tiling + cp.async double
-  buffering — holds **~26–27%** across large sizes (27.3% @ 8192 … 28.6% @ 1024). The earlier
-  *naive* version (no shared-mem reuse) sat at ~17–22% and decayed to 17% at 8192 as the Tensor
-  Cores starved on global-memory traffic; pipelining the global→shared loads fixed that
-  (1.58× @ 8192, holds ~63 TFLOP/s). The remaining gap to 100% is cuBLAS's deeper 3+-stage,
-  128×64 register-tiled pipeline. The "% of FP32 cuBLAS" figure remains precision-mismatched
-  and is kept only for continuity.
+  Tensor Core path), the optimized WMMA kernel reaches **45.0% @ 8192**. Three stages of work
+  got it there from the naive **17.3%**: (1) shared-mem tiling + cp.async double-buffering fixed
+  the naive memory-bound decay (47→63 TFLOP/s); (2) a 128×128 tile with per-warp 2×2 register
+  tiling + 3-stage pipeline raised reuse (→103 TFLOP/s, 1.64×); (3) size dispatch keeps the
+  64×64 tile for N<1536 so small matrices don't lose occupancy. Pipeline depth is tuned by
+  measurement (3 stages 103 > 4 stages 95 > 5 stages 88 TFLOP/s @ 8192). **Warp specialization
+  was implemented and benchmarked but did *not* beat the multi-stage pipeline** (95.4 vs 103.2 @
+  8192) — at this 512-thread tile the cp.async pipeline already saturates latency-hiding, so
+  dedicating warps to production costs more mma throughput than it saves. The remaining gap to
+  cuBLAS is its larger CTA tile and warp-specialized scheduling on top of TMA-class transfers.
+  The "% of FP32 cuBLAS" figure remains precision-mismatched and is kept only for continuity.
 - **cuBLAS-TC confirms the Tensor Core path.** cublas_tc reaches 229 TFLOP/s @ 8192 — **4.2×**
   the FP32 cublasSgemm (54.4) and up to **22×** at 512 — which is only possible on the 5th-gen
   Tensor Cores, so the baseline is doing what it claims.
@@ -59,20 +63,22 @@ methodology to the WMMA kernel — the FP32→FP16 cast is staged once outside t
 small-N timing.
 
 Result on sm_120, vs this honest ceiling (full sweep in `bench.csv`; FP32-only sweep preserved
-in `bench_fp32only.csv`). WMMA here is the **shared-mem + cp.async pipelined** kernel:
+in `bench_fp32only.csv`). WMMA here is the **size-dispatched, register-tiled, 3-stage cp.async**
+kernel:
 
 | size | wmma % of FP32 cuBLAS | **wmma % of cuBLAS-TC** | cublas_tc speedup vs FP32 |
 |---|---|---|---|
-| 512  | 1097% | 49.5% | 21.3× |
-| 1024 | 371%  | 28.6% | 14.3× |
-| 2048 | 151%  | 26.2% | 5.7× |
-| 4096 | 118%  | 26.4% | 4.5× |
-| 8192 | 114%  | **27.3%** | 4.2× |
+| 512  | 1097% | 47.6% | 21.3× |
+| 1024 | 371%  | 31.4% | 14.3× |
+| 2048 | 151%  | 32.0% | 5.7× |
+| 4096 | 118%  | 40.7% | 4.5× |
+| 8192 | 188%  | **45.0%** | 4.2× |
 
-The WMMA figure sits at the **~26–27%** range against the same-precision Tensor Core ceiling
-(naive was ~17–22% and decayed at 8192; the cp.async pipeline closed that — see
-`results/nsys_profile.md`). No size exceeds 100% of cuBLAS-TC (512's 49.5% is small-matrix
-launch overhead). The FP32-cuBLAS column is retained only for continuity.
+The WMMA kernel reaches **45% @ 8192** against the same-precision Tensor Core ceiling (naive was
+17–22% and decayed at 8192; shared-mem+cp.async, then register tiling + deeper pipeline + size
+dispatch closed most of the gap; warp specialization was tried and rejected — see
+`results/nsys_profile.md`). No size exceeds 100% of cuBLAS-TC. The FP32-cuBLAS column is retained
+only for continuity.
 
 ## Sources
 - [RTX PRO 6000 Blackwell — NVIDIA](https://www.nvidia.com/en-us/products/workstations/professional-desktop-gpus/rtx-pro-6000/)
