@@ -15,7 +15,9 @@ CSV  = os.path.join(HERE, "results", "bench.csv")
 # cublas_tc=GemmEx(FP16 in/FP32 acc,TC) — the honest same-precision ceiling for wmma/mma.
 KORDER = ["naive", "tiled", "wmma",
           "mma_base", "mma_swizzle", "mma_vec", "mma_pipe", "mma_warptile",
-          "cublas", "cublas_tf32", "cublas_tc"]
+          "cutlass_sm90",
+          "mma_fp8", "mma_fp4", "mma_mxfp4",
+          "cublas", "cublas_tf32", "cublas_tc", "cublaslt_fp8"]
 # consistent colour + style per kernel across all charts
 STYLE = {
     "naive":       ("#9aa0a6", "o", "naive (CUDA core)"),
@@ -27,12 +29,23 @@ STYLE = {
     "mma_vec":      ("#9059d6", "v", "mma_vec (+cp.async 16B)"),
     "mma_pipe":     ("#6f2dbd", "^", "mma_pipe (+2-stage pipeline)"),
     "mma_warptile": ("#4a0d67", "P", "mma_warptile (+64x64 warp tile) — final"),
+    "cutlass_sm90": ("#0b8043", "X", "cutlass_sm90 (CUTLASS 3.x wgmma, H100)"),
+    # Phase 3: low-precision formats (sm_120 mma path) — teal gradient
+    "mma_fp8":      ("#12b5cb", "o", "mma_fp8 (E4M3, our kernel)"),
+    "mma_fp4":      ("#129eaf", "s", "mma_fp4 (E2M1 unpacked, our kernel)"),
+    "mma_mxfp4":    ("#0b6e7a", "P", "mma_mxfp4 (packed E2M1 + block scale) — fastest"),
     "cublas":      ("#b31412", "^", "cuBLAS FP32 (cublasSgemm)"),
     "cublas_tf32": ("#e8710a", "v", "cuBLAS TF32-TC (cublasGemmEx)"),
     "cublas_tc":   ("#188038", "*", "cuBLAS FP16-TC (cublasGemmEx) — ceiling"),
+    "cublaslt_fp8": ("#7a1fa2", "*", "cuBLASLt FP8 (E4M3) — library FP8 ceiling"),
 }
 # the mma.sync ablation ladder, in optimization order (for the ablation chart)
 MMA_LADDER = ["wmma", "mma_base", "mma_swizzle", "mma_vec", "mma_pipe", "mma_warptile"]
+# Phase 3 Pareto: throughput vs accuracy across precisions (the chart only includes
+# kernels measured on the sm_120 box; cuBLAS rows are the library reference points)
+PARETO_KERNELS = ["mma_warptile", "mma_fp8", "mma_fp4", "mma_mxfp4", "cublas_tc", "cublaslt_fp8"]
+# % -of-cuBLAS-TC chart stays FP16-only: lowprec kernels are excluded from the FP16 ceiling chart
+PCT_TC_EXCLUDE = {"cublas_tc", "mma_fp8", "mma_fp4", "mma_mxfp4", "cublaslt_fp8"}
 
 
 def load(path):
@@ -96,7 +109,7 @@ def main():
             # ---- Chart 2: % of cuBLAS-TC (same-precision ceiling) ----
             tc = {s: tf for (s, tf, *_ ) in sorted(kerns.get("cublas_tc", []))}
             fig, ax = plt.subplots(figsize=(8, 5))
-            for k in [x for x in KORDER if x != "cublas_tc"]:
+            for k in [x for x in KORDER if x not in PCT_TC_EXCLUDE]:
                 if k in kerns and tc:
                     c, m, lab = STYLE[k]
                     pts = [(s, 100*tf/tc[s]) for (s,tf,*_ ) in sorted(kerns[k]) if s in tc]
@@ -107,7 +120,7 @@ def main():
             ax.set_xlabel("matrix size  M=N=K"); ax.set_ylabel("% of cuBLAS FP16-TC (same precision)")
             ax.set_title(f"Fraction of the honest Tensor Core ceiling — {short} (sm_{sm})")
             # headroom above the highest line (mma_warptile exceeds the 100% ceiling on sm_120)
-            ymax = max([100] + [100*tf/tc[s] for k in KORDER if k in kerns and k != "cublas_tc"
+            ymax = max([100] + [100*tf/tc[s] for k in KORDER if k in kerns and k not in PCT_TC_EXCLUDE
                                 for (s,tf,*_ ) in kerns[k] if s in tc])
             ax.set_ylim(0, ymax * 1.12)
             # legend below the axes so the 100% dashed line never crosses it
@@ -166,6 +179,35 @@ def main():
                 p4 = f"mma_ablation_sm{sm}.png"
                 fig.tight_layout(); fig.savefig(os.path.join(HERE,"results",p4), dpi=140); plt.close(fig)
                 lines.append(f"![mma.sync ablation ladder]({p4})\n")
+
+            # ---- Chart 5 (only when low-precision rows exist): precision Pareto ----
+            # Throughput vs accuracy at the largest size: FP16 -> FP8 -> FP4 -> MXFP4.
+            par = [k for k in PARETO_KERNELS if k in kerns]
+            if any(k.startswith("mma_fp") or k == "mma_mxfp4" for k in par):
+                fig, ax = plt.subplots(figsize=(8.5, 5.5))
+                for k in par:
+                    row = next((r for r in sorted(kerns[k]) if r[0] == big), None)
+                    if not row:
+                        continue
+                    _, tf, _, err = row
+                    c, m, lab = STYLE[k]
+                    filled = k.startswith("mma_")
+                    ax.scatter(err, tf, s=180, color=c, marker=m,
+                               facecolors=c if filled else "white", edgecolors=c,
+                               linewidths=2, zorder=3, label=lab)
+                    ax.annotate(f"{tf:.0f}", (err, tf), textcoords="offset points",
+                                xytext=(10, 6), fontsize=10, fontweight="bold", color=c)
+                ax.set_xscale("log")
+                ax.set_xlabel(f"max abs error vs FP32 cuBLAS at M=N=K={big}  (log scale, lower = better)")
+                ax.set_ylabel("throughput (TFLOP/s, higher = better)")
+                ax.set_title(f"Precision Pareto: FP16 -> FP8 -> FP4 — {short} (sm_{sm})\n"
+                             "filled = this repo's mma.sync kernels, hollow = cuBLAS / cuBLASLt")
+                ax.legend(fontsize=8, loc="upper left", framealpha=1.0)
+                ax.grid(True, alpha=.3, which="both")
+                ax.set_ylim(0, None)
+                p5 = f"precision_pareto_sm{sm}.png"
+                fig.tight_layout(); fig.savefig(os.path.join(HERE,"results",p5), dpi=140); plt.close(fig)
+                lines.append(f"![precision Pareto]({p5})\n")
 
         tc_tf = next((r[1] for r in sorted(kerns.get("cublas_tc", [])) if r[0] == big), None)
         lines.append(f"At M=N=K={big}:\n")
