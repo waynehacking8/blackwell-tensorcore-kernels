@@ -89,16 +89,25 @@
     sm_120.
 
 ## Phase 3 — Blackwell formats (the frontier)
-- [ ] FP8 (E4M3) Tensor Core GEMM; quality vs FP16; throughput delta.
-- [ ] Blackwell tcgen05 / MXFP4 microscaling GEMM; tensor-memory accelerator (TMA) loads.
+**Hardware scoping (corrected 2026-06-02):** `tcgen05` instructions (tensor memory, CTA pairs,
+`tcgen05.mma`) are **sm_100 (B200 / datacenter Blackwell) only** — they do not exist on sm_120
+(GB202 / RTX Pro 6000). What sm_120 *does* have: 5th-gen Tensor Core FP8 (E4M3/E5M2) and FP4
+support through the regular `mma` instruction path. The items below are scoped to what this
+repo's hardware can actually run; tcgen05 work is parked as B200-only (see the literature-
+ceilings note for the B200 references).
+
+- [ ] FP8 (E4M3) Tensor Core GEMM via the sm_120 `mma` path; quality vs FP16; throughput delta.
+- [ ] FP4 (and MXFP4 block-scaling where the sm_120 mma path supports it) GEMM.
 - [ ] FP4 vs FP8 vs FP16 throughput/accuracy Pareto on RTX Pro 6000.
-  - **Question:** how much throughput do Blackwell-generation formats buy, and at what accuracy
-    cost?
-  - **Method:** implement the FP8 / tcgen05 kernels on top of the working FP16 WMMA kernel; add
-    them as new kernel rows to `make bench`; plot the throughput (TFLOP/s) vs accuracy
-    (max_abs_err) Pareto.
+  - **Question:** how much throughput do Blackwell-generation formats buy on a workstation
+    Blackwell card (sm_120), and at what accuracy cost?
+  - **Method:** implement the FP8 / FP4 kernels on top of the working mma.sync kernel (Phase 2's
+    `gemm_mma.cu` — full register control, already beats cuBLAS-TC at FP16); add them as new
+    kernel rows to `make bench`; plot the throughput (TFLOP/s) vs accuracy (max_abs_err) Pareto.
   - **Read-out:** the Pareto frontier per precision; compare against cuBLAS's FP8 path where
-    available.
+    available. Note: published "98–99% of cuBLAS" tcgen05 results (gau-nernst, MXFP8
+    block-scaled) are B200 numbers and are NOT reproduction targets for this hardware.
+- ~~Blackwell tcgen05 / tensor-memory GEMM~~ — **out of scope on this hardware** (sm_100 only).
 
 ## Phase 4 — Literature-ceiling reproductions on available hardware (specified)
 
