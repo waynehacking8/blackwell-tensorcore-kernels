@@ -28,24 +28,36 @@
     Hopper the gap is *architectural* (instruction class), not a tiling-quality gap.
 
 ## Phase 2 — Better SIMT + Tensor Core
-- [ ] Register-blocked tiled kernel (e.g. 128x128 block, 8x8 per thread).
-- [ ] Double-buffered shared memory; bank-conflict-free layout.
-- [ ] **Hand-written mma.sync (m16n8k16) replacing the WMMA wrapper — test whether Boehm's
+- [x] Register-blocked tiled kernel (e.g. 128x128 block, 8x8 per thread).
+  *(Subsumed by the mma.sync item below: `mma_base`..`mma_warptile` are 128×128-block,
+  register-tiled kernels; the per-warp register tile is the ablation's decisive step.)*
+- [x] Double-buffered shared memory; bank-conflict-free layout.
+  *(Subsumed by the mma.sync item below: `mma_swizzle` adds the bank-conflict-free XOR-swizzled
+  layout, `mma_pipe` the multi-stage — sweep winner: double-buffered — cp.async pipeline.)*
+- [x] **Hand-written mma.sync (m16n8k16) replacing the WMMA wrapper — test whether Boehm's
   "~94% with standard optimizations" transfers to the Tensor Core regime.**
   - **Question:** Boehm's ablation (2D blocktiling 68.7% → vectorize 78.4% → warptiling 93.7%
     of cuBLAS) is FP32 SIMT data — CUDA cores. Tensor Cores consume operands ~8× faster, so
     every feed inefficiency is amplified ~8×; and the WMMA wrapper hides fragment register
     layout, blocking register-level pipelining. Is ≥90% of the sm_80-style cuBLAS-TC ceiling
     (229 TFLOP/s on the Pro 6000) still reachable when the compute units are Tensor Cores?
-  - **Method:** replace WMMA with raw `mma.sync.aligned.m16n8k16` PTX (full register control),
-    then apply the standard stack step by step, benching each as a new kernel row (same
-    ablation discipline as the existing wmma progression): 128×128 CTA tile with 2×2 per-warp
-    register tiling → swizzled (bank-conflict-free) shared-memory layout → 16-byte vectorized
-    `cp.async` loads → 3/4-stage pipeline sweep.
-  - **Read-out:** the per-step ablation table vs cublas_tc. Final kernel ≥85–90% → Boehm's
-    claim transfers to the TC regime (and the WMMA wrapper was the blocker). Stalls at
-    ~60–70% → the remaining gap quantifies what CUTLASS's deeper instruction scheduling buys —
-    either result is a finding.
+  - **Method (as run):** replace WMMA with raw `mma.sync.aligned.m16n8k16` PTX + `ldmatrix`
+    (full register control), then apply the standard stack step by step, benching each as a new
+    kernel row (same ablation discipline as the existing wmma progression): 128×128 CTA tile
+    with 2×2 per-warp register tiling (`mma_base`) → swizzled bank-conflict-free shared-memory
+    layout (`mma_swizzle`) → 16-byte vectorized `cp.async` loads (`mma_vec`) → 2/3/4-stage
+    pipeline sweep (`mma_pipe`) → 64×64 per-warp register tile (`mma_warptile`, the analog of
+    Boehm's warptiling step). Code: `src/gemm_mma.cu` + `include/mma_ptx.cuh`;
+    sweep: `scripts/sweep_mma_stages.sh`.
+  - **Result: Boehm's claim transfers — and overshoots. 20.7% → 25.6% → 72.2% → 77.7% →
+    106.1% of cuBLAS-TC** (243.2 vs 229.0 TFLOP/s @ 8192³). The final kernel *beats* the
+    `cutlass_80_tensorop_s16816gemm_f16_128x64` kernel cuBLAS dispatches on sm_120 — same
+    `m16n8k16` instruction class, better tile fit (128×128 CTA / 64×64 warp tile / 2-stage
+    pipeline, tuned on-card). The WMMA wrapper was conclusively the blocker: it owns the
+    smem→register layout (blocking the swizzle) and caps register tiling at 16×16 fragments
+    (blocking the 4:1 mma:ldmatrix ratio that fixes the MIO-queue-full stall from Phase 1).
+    Caveat kept honest: this beats *the kernel cuBLAS chose*, not the hardware peak — see
+    `results/mma_ablation.md` for the full analysis, validation checks, and raw data pointers.
 
 ## Phase 2.5 — Hopper wgmma (new: follows from the Phase 1 H100 result)
 - [ ] **CUTLASS 3.x / wgmma GEMM on H100 — break the WMMA ceiling with a constructive proof.**

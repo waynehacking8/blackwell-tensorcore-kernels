@@ -137,8 +137,9 @@ kernel:
 The WMMA kernel reaches **45% @ 8192** against the same-precision Tensor Core ceiling (naive was
 17–22% and decayed at 8192; shared-mem+cp.async, then register tiling + deeper pipeline + size
 dispatch closed most of the gap; warp specialization was tried and rejected — see
-`results/nsys_profile.md`). No size exceeds 100% of cuBLAS-TC. The FP32-cuBLAS column is retained
-only for continuity.
+`results/nsys_profile.md`). No size exceeds 100% of cuBLAS-TC **for the WMMA kernel** (the Phase 2
+raw-`mma.sync` kernel does exceed it — validated separately below). The FP32-cuBLAS column is
+retained only for continuity.
 
 **On the 1024 dip in % of cuBLAS-TC (28.2 %, below its neighbours).** Verified to be a
 *denominator* effect, not a kernel bug: forcing M=N=K=1024 through the 128×128 tile gives 30.3
@@ -146,6 +147,27 @@ TFLOP/s vs the dispatched 64×64 tile's **38.7** — i.e. the dispatch correctly
 tile, and our WMMA is *not* slow at 1024. The lower percentage comes from cuBLAS-TC itself being
 unusually fast there (~140 TFLOP/s), so the ratio dips even though our absolute throughput is
 healthy. The size-dispatch crossover (N≥1536 → 128×128) is therefore correct as set.
+
+## Phase 2 mma.sync kernel — validating an above-the-ceiling claim
+
+The Phase 2 hand-written `mma.sync` kernel (`mma_warptile`, `src/gemm_mma.cu`) measures
+**243.2 TFLOP/s @ 8192³ = 106.1% of cuBLAS-TC** on sm_120. A >100% number gets extra scrutiny:
+
+| check | evidence | verdict |
+|---|---|---|
+| Correctness | `max_abs_err` = 0.0112 @ 8192, bit-identical to `wmma` and `cublas_tc` (same FP16-in/FP32-acc math); verified standalone so it cannot inherit another kernel's output buffer | ✓ |
+| Reproducibility | 5 separate process invocations: 243.2–244.0 TFLOP/s (spread <0.5%); `cublas_tc` 229.0–229.5 in the same runs | ✓ |
+| Thermal/order fairness | alternating cublas→mma→cublas→mma in separate processes; gap unchanged; both run under the same 300 W Max-Q governor (cap reached — `results/clock_state_mma_session.txt`) | ✓ |
+| GPU-timeline (not harness) | nsys per-instance durations: ours 4.52 ms vs `cutlass_80_tensorop_s16816gemm_f16_128x64_64x3` 4.79 ms (`results/nsys_kern_sum_mma_8192.txt`) | ✓ |
+| Same instruction class | cuBLAS kernel name contains `s16816` = `mma.sync.m16n8k16`, the same instruction ours uses — a tiling/scheduling contest, not an instruction-set advantage | ✓ |
+| Baseline continuity | session re-measured `wmma` 103.1 (committed: 103.5) and `cublas_tc` 229.0 (committed: 229.2) — same clock regime as Phase 1 | ✓ |
+
+**Scope of the claim (kept honest):** the kernel beats *the kernel cuBLAS chooses to dispatch*
+on sm_120 (an sm_80-generation CUTLASS kernel, 128×64 tile) — it does **not** beat the hardware
+peak. GB202's FP16→FP32-acc dense peak at the governed ~2.3 GHz is ~440 TFLOP/s if the
+workstation part runs full-rate Tensor Cores (our 243 exceeding the half-rate figure of ~220
+indicates it is full-rate); both our kernel (~55% of that) and cuBLAS (~52%) leave headroom.
+Full analysis: `results/mma_ablation.md`.
 
 ## H100 (sm_90) cross-check — does any of this transfer?
 

@@ -9,22 +9,28 @@ fragment shapes, occupancy — to measured TFLOP/s as a fraction of the cuBLAS c
 Hopper and Blackwell silicon.
 
 ## What this is
-- A naive baseline, a shared-memory tiled GEMM, and a **WMMA Tensor Core** GEMM (FP16 in / FP32 accumulate).
+- A naive baseline, a shared-memory tiled GEMM, a **WMMA Tensor Core** GEMM, and a
+  **hand-written raw `mma.sync` Tensor Core** GEMM ablation ladder (FP16 in / FP32 accumulate).
 - A harness that checks correctness against cuBLAS and reports **TFLOP/s and % of the cuBLAS ceiling**,
   across a **precision ladder** of cuBLAS baselines on the same card:
   **`cublas`** = `cublasSgemm` (FP32, CUDA cores) → **`cublas_tf32`** = `cublasGemmEx` (FP32 in,
   TF32 compute, Tensor Cores) → **`cublas_tc`** = `cublasGemmEx` (FP16 in / FP32 acc, Tensor Cores —
-  the same precision as the WMMA kernel, hence the honest ceiling).
+  the same precision as the WMMA/mma.sync kernels, hence the honest ceiling).
 - Builds for **sm_90 (H100)** and **sm_120 (Blackwell RTX Pro 6000)** so the same kernels *can* be
   profiled across two generations.
 
 > **Measurement status:** both generations are now populated in `results/bench.csv` —
 > **Blackwell RTX PRO 6000 Max-Q (sm_120)** and **H100 80GB SXM5 (sm_90)** (run on a separate
-> 8×H100 box, pinned to a single idle GPU). The cross-generation comparison below is the
-> headline finding of this repo: **the same WMMA kernel that reaches 45% of cuBLAS-TC on
-> sm_120 reaches only 8% on H100** — not because the kernel runs slower per-SM, but because
-> Hopper's Tensor Core ceiling is only reachable through `wgmma` warpgroup instructions that
-> the WMMA API cannot emit.
+> 8×H100 box, pinned to a single idle GPU). Two headline findings:
+>
+> 1. **(Phase 2, new)** A hand-written **raw `mma.sync` kernel reaches 106% of cuBLAS-TC on
+>    sm_120** (243 vs 229 TFLOP/s @ 8192³) — beating the `cutlass_80` kernel cuBLAS dispatches
+>    on this card, with the same standard-optimization stack Boehm used to reach ~94% on CUDA
+>    cores. The WMMA wrapper, not the recipe, was what kept the Phase 1 kernel at 45%.
+> 2. **(Phase 1)** The cross-generation comparison: **the same WMMA kernel that reaches 45% of
+>    cuBLAS-TC on sm_120 reaches only 8% on H100** — not because the kernel runs slower per-SM,
+>    but because Hopper's Tensor Core ceiling is only reachable through `wgmma` warpgroup
+>    instructions that the WMMA API cannot emit.
 
 ## What this is NOT
 - Not a cuBLAS replacement — cuBLAS is the ceiling measured against, honestly.
@@ -39,10 +45,13 @@ Hopper and Blackwell silicon.
 src/gemm_naive.cu      # one-thread-per-output baseline (correctness anchor)
 src/gemm_tiled.cu      # shared-memory tiled + register-blocked SIMT GEMM
 src/gemm_wmma.cu       # WMMA 16x16x16 Tensor Core GEMM (FP16 in, FP32 acc)
+src/gemm_mma.cu        # hand-written raw mma.sync m16n8k16 GEMM — 5-step ablation ladder (Phase 2)
+include/mma_ptx.cuh    # the PTX building blocks: mma.sync, ldmatrix, XOR swizzle, cp.async
 src/reference.cu       # cuBLAS FP32 ceiling (cublasSgemm, CUDA cores)
-src/cublas_tc.cu       # cuBLAS Tensor Core ceiling (cublasGemmEx, FP16 in / FP32 acc) — same precision as wmma
+src/cublas_tc.cu       # cuBLAS Tensor Core ceiling (cublasGemmEx, FP16 in / FP32 acc) — same precision as wmma/mma
 src/main.cu            # correctness + benchmark driver -> results/bench.csv
 include/util.cuh       # timing, init, max-abs-error check
+scripts/sweep_mma_stages.sh  # cp.async pipeline-depth sweep -> results/mma_stage_sweep.csv
 CMakeLists.txt         # builds for sm_90 and sm_120
 docs/design-decisions.md
 docs/roadmap.md
@@ -121,6 +130,60 @@ before/after and the WS experiment.
 The **% of FP32 cuBLAS** column is precision-mismatched (kept for continuity); its `>100%` rows
 are FP16-TC vs FP32-CUDA-core, not the kernel beating cuBLAS. `cublas_tc` is 4.2–23× faster than
 `cublasSgemm`, confirming the Tensor Core path.
+
+### Phase 2: hand-written mma.sync — past the WMMA ceiling, past cuBLAS (sm_120)
+
+Phase 1 ended with a diagnosis: the WMMA kernel is **feed-bound** (MIO-queue-full), and the
+fixes — swizzled shared memory, deeper register tiling — are exactly what the WMMA API hides.
+Phase 2 tests that diagnosis constructively: rewrite the kernel on **raw
+`mma.sync.aligned.m16n8k16` PTX + `ldmatrix`** (`src/gemm_mma.cu`), then re-apply the standard
+optimization stack one step at a time — the same ablation discipline (and the same recipe) as
+[Simon Boehm's FP32 ladder](https://siboehm.com/articles/22/CUDA-MMM), which reaches ~94% of
+cuBLAS on CUDA cores. The roadmap question: does that recipe survive the move to Tensor Cores,
+which consume operands ~8× faster?
+
+**It does — and overshoots:**
+
+![mma.sync ablation ladder](results/mma_ablation_sm120.png)
+
+| step | adds | TFLOP/s @ 8192³ | % of cuBLAS-TC |
+|---|---|---|---|
+| `wmma` (Phase 1 best) | – | 103.1 | 45.0% |
+| `mma_base` | raw mma.sync + ldmatrix, 128×128 CTA, 2×2 warp tiling, scalar loads | 47.4 | 20.7% |
+| `mma_swizzle` | + XOR-swizzled (bank-conflict-free) smem | 58.7 | 25.6% |
+| `mma_vec` | + 16-byte vectorized `cp.async` | 165.3 | 72.2% |
+| `mma_pipe` | + 2-stage pipeline (sweep winner: 2 > 3 > 4) | 178.0 | 77.7% |
+| **`mma_warptile`** | **+ 64×64 per-warp register tile** | **243.2** | **106.1%** |
+| `cublas_tc` (ceiling) | `cutlass_80_tensorop_s16816gemm_f16_128x64` | 229.0 | 100% |
+
+Three things make the 106% credible (full validation in
+[`results/mma_ablation.md`](results/mma_ablation.md)):
+**(1)** identical `max_abs_err` to cuBLAS-TC at every size (same math, verified standalone);
+**(2)** the gap is visible inside the GPU timeline — nsys shows 4.52 ms vs 4.79 ms per kernel
+instance (`results/nsys_kern_sum_mma_8192.txt`); **(3)** it is a same-instruction contest —
+cuBLAS's kernel name (`s16816`) says it uses the *same* `m16n8k16` instruction; we just tile and
+pipeline it better for this card (128×128 CTA / 64×64 warp tile / 2 stages, 196 reg/thread,
+0 spills).
+
+The honest framing: this beats **the kernel cuBLAS dispatches on sm_120** — an Ampere-era
+CUTLASS kernel chosen by heuristics that don't yet have Blackwell-native FP16 tuning — not the
+hardware peak. But that is precisely the repo's thesis demonstrated in reverse: *the ceiling on
+any given card is set by which instruction class and tile shape the software can reach.* On
+sm_120, raw `mma.sync` + the standard recipe reaches all of it. (On Hopper the same kernel would
+cap at the ~63–65%-of-peak `mma.sync` instruction ceiling — `wgmma` territory, roadmap
+Phase 2.5.)
+
+What each step says (ablation reading, details in
+[`results/mma_ablation.md`](results/mma_ablation.md)):
+- **The baseline starts *below* WMMA on purpose** — every memory-path optimization is stripped
+  so each can be priced separately. Raw Tensor Core instructions alone buy nothing (20.7%).
+- **Vectorized `cp.async` is the biggest single jump (2.8×)** — on Tensor Cores, feed
+  inefficiency is amplified ~8× vs Boehm's CUDA-core numbers.
+- **Warptiling is the decisive step (77.7% → 106.1%)**, same as in Boehm's ladder (his: 78.4% →
+  93.7%). 64×64 warp tiles double arithmetic intensity per `ldmatrix` (4:1 mma:ldmatrix vs
+  2:1) — the direct fix for the Phase 1 MIO-queue-full stall.
+- **The pipeline sweep flips vs WMMA**: 2 stages beat 3 (WMMA preferred 3). With ldmatrix
+  feeding mma.sync directly, deeper buffering just costs occupancy.
 
 ### Measured on H100 80GB SXM5 (sm_90, CUDA 13.1) — the cross-generation result
 
