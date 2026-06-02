@@ -160,6 +160,7 @@ The Phase 2 hand-written `mma.sync` kernel (`mma_warptile`, `src/gemm_mma.cu`) m
 | Thermal/order fairness | alternating cublas→mma→cublas→mma in separate processes; gap unchanged; both run under the same 300 W Max-Q governor (cap reached — `results/clock_state_mma_session.txt`) | ✓ |
 | GPU-timeline (not harness) | nsys per-instance durations: ours 4.52 ms vs `cutlass_80_tensorop_s16816gemm_f16_128x64_64x3` 4.79 ms (`results/nsys_kern_sum_mma_8192.txt`) | ✓ |
 | Same instruction class | cuBLAS kernel name contains `s16816` = `mma.sync.m16n8k16`, the same instruction ours uses — a tiling/scheduling contest, not an instruction-set advantage | ✓ |
+| Stall-level mechanism (ncu) | `ncu --set full` side-by-side (`results/ncu_sm120_*_8192.txt`): ours runs Tensor pipe at 85.0% vs cuBLAS 74.0%; both stall only on fixed-latency math dependencies (2.9 vs 4.0 cyc/warp); the WMMA kernel's MIO-queue-full stall (34.2%) is eliminated | ✓ |
 | Baseline continuity | session re-measured `wmma` 103.1 (committed: 103.5) and `cublas_tc` 229.0 (committed: 229.2) — same clock regime as Phase 1 | ✓ |
 
 **Scope of the claim (kept honest):** the kernel beats *the kernel cuBLAS chooses to dispatch*

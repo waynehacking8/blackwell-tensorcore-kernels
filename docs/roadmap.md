@@ -56,8 +56,12 @@
     pipeline, tuned on-card). The WMMA wrapper was conclusively the blocker: it owns the
     smem→register layout (blocking the swizzle) and caps register tiling at 16×16 fragments
     (blocking the 4:1 mma:ldmatrix ratio that fixes the MIO-queue-full stall from Phase 1).
-    Caveat kept honest: this beats *the kernel cuBLAS chose*, not the hardware peak — see
-    `results/mma_ablation.md` for the full analysis, validation checks, and raw data pointers.
+    ncu confirms the mechanism at the stall level (`scripts/profile_mma_ncu.sh`, run in a
+    SYS_ADMIN container): Tensor-pipe utilization 24.7% (wmma) → **85.0%** (ours) vs 74.0%
+    (cuBLAS); the MIO-queue-full stall (34.2% of warp cycles) is eliminated — the top stall
+    becomes the fixed-latency math dependency that ncu attributes to "already highly optimized
+    kernels". Caveat kept honest: this beats *the kernel cuBLAS chose*, not the hardware peak —
+    see `results/mma_ablation.md` for the full analysis, validation checks, and raw data pointers.
 
 ## Phase 2.5 — Hopper wgmma (new: follows from the Phase 1 H100 result)
 - [ ] **CUTLASS 3.x / wgmma GEMM on H100 — break the WMMA ceiling with a constructive proof.**

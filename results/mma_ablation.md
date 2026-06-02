@@ -97,6 +97,43 @@ The Phase 2 ladder confirms that diagnosis constructively:
   (so no swizzle control, only padding) and its 16×16×16 fragment granularity caps the
   achievable register-tiling ratio. Raw `mma.sync` + `ldmatrix` unlocks both.
 
+## ncu side-by-side profile — the stall-level proof (sm_120)
+
+`ncu --set full` on all three kernels at 8192³, run via `scripts/profile_mma_ncu.sh` (inside a
+`--cap-add=SYS_ADMIN` CUDA container — this box restricts GPU counters to root). One kernel
+instance each; full text exports committed as `ncu_sm120_{wmma,mma_warptile,cublastc}_8192.txt`.
+
+| metric (ncu, 8192³) | `gemm_wmma_t<128,128,3>` | `gemm_mma_t<…,64,64,2>` (ours, final) | `cutlass_80_tensorop_s16816` (cuBLAS-TC) |
+|---|---|---|---|
+| **Tensor pipe utilization** | **24.7%** | **85.0%** | 74.0% |
+| Compute (SM) throughput | 48.7% | **83.4%** | 72.9% |
+| L1/TEX (shared-mem) throughput | **88.1% (saturated)** | 42.6% | 55.5% |
+| Warp cycles per issued instruction | 49.6 | **5.8** | 6.6 |
+| **Top stall reason** | **MIO queue full** (17.0 cyc = 34.2%) | fixed-latency exec dependency (2.9 cyc) | fixed-latency exec dependency (4.0 cyc) |
+| Achieved occupancy | 65.3% | 16.6% | 8.3% |
+| Registers / thread | 64 | 186 | 154 |
+| CTA / threads | 4096 × 512 | 4096 × 128 | 8192 × 128 |
+
+Three things the table proves:
+
+1. **The Phase 1 diagnosis was right, and the fix worked.** The WMMA kernel stalls on
+   MIO-queue-full (its shared-memory pipe runs at 88% while its Tensor pipe idles at 24.7%).
+   In the mma.sync kernel that stall is *gone* — the top stall becomes a 2.9-cycle math
+   dependency, which ncu's own guidance describes as a stall that "only shows up as a top
+   contributor in **already highly optimized kernels**."
+2. **The winning signature transferred.** Phase 1 observed (on H100) that winning kernels run
+   at *low occupancy with large register state and near-peak tensor utilization*. Our final
+   kernel now has exactly that profile (16.6% occupancy, 186 reg/thread, 85% Tensor pipe) —
+   the same shape as cuBLAS's kernel (8.3%, 154, 74%), and the opposite of the WMMA kernel's
+   high-occupancy/low-utilization profile.
+3. **Why we win the head-to-head:** our Tensor pipe runs at 85.0% vs cuBLAS's 74.0% (and
+   compute throughput 83.4% vs 72.9%). cuBLAS's 128×64 CTA tile needs 2× the CTAs (8192 vs
+   4096) and re-reads operands more; the 128×128 tile amortizes better on this card. Same
+   instruction, better feed schedule — that 11-point utilization gap is the 6% wall-clock win.
+
+(Durations under ncu replay — 22.9 / 6.8 / 7.7 ms — are inflated vs wall-clock but preserve
+the ranking; the wall-clock numbers in `bench.csv` are the quoted results.)
+
 ## Configuration of the final kernel (`mma_warptile`)
 
 ```
@@ -116,10 +153,6 @@ measured under identical conditions. Raw clock log: `clock_state_mma_session.txt
 
 ## Limitations / next steps
 
-- **No ncu counter access on this box** (no root; `ERR_NVGPUCTRPERM`), so the stall-reason
-  comparison (ours vs cutlass_80) that closed Phase 1 on H100 cannot be repeated here yet.
-  The nsys kernel-duration evidence stands on its own; an ncu capture would additionally show
-  where the remaining ~45% of headroom (vs the full-rate hardware peak estimate) goes.
 - **Small sizes are not dispatched.** The mma kernels run the 128×128 tile at every size, so
   they lose to cuBLAS below 2048 (occupancy). The WMMA kernel's size-dispatch trick (64×64 tile
   for N<1536) would transfer directly; not implemented because the roadmap question is about

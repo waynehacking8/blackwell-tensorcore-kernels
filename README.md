@@ -156,14 +156,29 @@ which consume operands ~8× faster?
 | **`mma_warptile`** | **+ 64×64 per-warp register tile** | **243.2** | **106.1%** |
 | `cublas_tc` (ceiling) | `cutlass_80_tensorop_s16816gemm_f16_128x64` | 229.0 | 100% |
 
-Three things make the 106% credible (full validation in
+Four things make the 106% credible (full validation in
 [`results/mma_ablation.md`](results/mma_ablation.md)):
 **(1)** identical `max_abs_err` to cuBLAS-TC at every size (same math, verified standalone);
 **(2)** the gap is visible inside the GPU timeline — nsys shows 4.52 ms vs 4.79 ms per kernel
 instance (`results/nsys_kern_sum_mma_8192.txt`); **(3)** it is a same-instruction contest —
 cuBLAS's kernel name (`s16816`) says it uses the *same* `m16n8k16` instruction; we just tile and
 pipeline it better for this card (128×128 CTA / 64×64 warp tile / 2 stages, 196 reg/thread,
-0 spills).
+0 spills); **(4)** ncu shows *why*: our kernel runs the Tensor pipe at **85.0%** utilization vs
+cuBLAS's 74.0%, with the same top-stall signature ncu attributes to "already highly optimized
+kernels" (`results/ncu_sm120_*_8192.txt`, captured via `scripts/profile_mma_ncu.sh`).
+
+The ncu side-by-side also closes the Phase 1 → Phase 2 loop at the stall level:
+
+| ncu @ 8192³ | wmma (Phase 1) | **mma_warptile (Phase 2)** | cuBLAS-TC (cutlass_80) |
+|---|---|---|---|
+| Tensor pipe utilization | 24.7% | **85.0%** | 74.0% |
+| Warp cycles / issued instruction | 49.6 | **5.8** | 6.6 |
+| Top stall | **MIO queue full (34.2%)** | fixed-latency dep (2.9 cyc) | fixed-latency dep (4.0 cyc) |
+| Occupancy / registers | 65.3% / 64 | 16.6% / 186 | 8.3% / 154 |
+
+The MIO-queue-full stall that defined the WMMA kernel is **gone**; the kernel now has the
+low-occupancy / high-register / math-bound signature of the winning kernels — and runs its
+Tensor pipe 11 points hotter than the kernel cuBLAS picked.
 
 The honest framing: this beats **the kernel cuBLAS dispatches on sm_120** — an Ampere-era
 CUTLASS kernel chosen by heuristics that don't yet have Blackwell-native FP16 tuning — not the
