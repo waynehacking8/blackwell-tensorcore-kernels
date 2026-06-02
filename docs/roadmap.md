@@ -187,3 +187,23 @@ repo's own kernels, so every external claim becomes a measured row in `results/b
   - **Read-out:** measured-on-our-box vs published table. The gap between the two columns is
     itself a finding (clock governance, shared-box interference, version drift). These rows
     become the honest ceiling for Phase 3's own FP8 work.
+
+- [ ] **FP32-accumulate tensor rate on the RTX PRO 6000 — direct microbenchmark (closes the
+  one open physics question in this repo's peak arithmetic).**
+  All FP16/FP8/FP4 kernels here accumulate in FP32. Consumer GB202 (RTX 5090) runs
+  FP16-input/FP32-accumulate at **half** the FP16-accumulate tensor rate; whether the
+  workstation RTX PRO 6000 (same GB202 die) is full-rate or half-rate is not public. The repo
+  currently infers "full-rate" from "measured 243 TFLOP/s exceeds our own half-rate estimate
+  (~220)" (`results/mma_ablation.md`, `VALIDATION.md`) — a weak inference, since that estimate
+  is itself clock-dependent. The headline claim (106% of cuBLAS-TC) is relative and survives
+  either way, but every "% of theoretical peak" denominator depends on which rate is true.
+  - **Question:** is dense FP16-in/FP32-acc `mma.sync` on this card full-rate or half-rate
+    relative to FP16-in/FP16-acc?
+  - **Method:** pure register-resident back-to-back `mma.sync.aligned.m16n8k16` loop (no memory
+    traffic, no shared-memory loads), one block per SM, two variants differing only in the
+    accumulator type (`.f32` vs `.f16`); measure instruction throughput at recorded SM clocks;
+    report the ratio.
+  - **Read-out:** FP32-acc : FP16-acc rate ratio (1.0 = full-rate, 0.5 = half-rate). Either
+    answer fixes the peak denominators in README/VALIDATION. Half-rate would mean both our
+    kernel and cuBLAS-TC sit near 100% of the FP32-acc ceiling — itself a notable finding
+    worth its own writeup.
