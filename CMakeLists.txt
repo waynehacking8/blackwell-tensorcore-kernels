@@ -8,7 +8,18 @@ endif()
 
 set(BENCH_SOURCES
   src/main.cu src/gemm_naive.cu src/gemm_tiled.cu src/gemm_wmma.cu src/gemm_mma.cu
+  src/gemm_mma_fp8.cu src/cublaslt_fp8.cu
   src/reference.cu src/cublas_tc.cu src/cublas_tf32.cu)
+
+# Phase 3: FP4 mma kinds (kind::f8f6f4 / kind::mxf4) need the sm_120a feature target.
+# The FP8 kernel works on any sm_89+ build; FP4/MXFP4 rows register only on 120a.
+#   cmake -DCMAKE_CUDA_ARCHITECTURES=120a ..
+if(CMAKE_CUDA_ARCHITECTURES MATCHES "120a")
+  add_compile_definitions(BUILD_SM120A)
+  message(STATUS "FP4/MXFP4 kernel rows ENABLED (sm_120a)")
+else()
+  message(STATUS "FP4/MXFP4 kernel rows disabled (build with -DCMAKE_CUDA_ARCHITECTURES=120a)")
+endif()
 
 # Phase 2.5: CUTLASS 3.x wgmma kernel — Hopper only (sm_90a), needs CUTLASS headers.
 #   cmake -DCMAKE_CUDA_ARCHITECTURES=90a -DCUTLASS_DIR=/path/to/cutlass ..
@@ -28,4 +39,4 @@ if(CUTLASS_DIR AND CMAKE_CUDA_ARCHITECTURES MATCHES "90a")
   target_include_directories(gemm_bench PRIVATE
     ${CUTLASS_DIR}/include ${CUTLASS_DIR}/tools/util/include)
 endif()
-target_link_libraries(gemm_bench PRIVATE cublas)
+target_link_libraries(gemm_bench PRIVATE cublas cublasLt)

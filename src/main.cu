@@ -30,6 +30,13 @@ void launch_mma_warptile(const float*,const float*,float*,int,int,int);
 #ifdef HAVE_CUTLASS_SM90
 void launch_cutlass_sm90(const float*,const float*,float*,int,int,int); // CUTLASS 3.x TMA+wgmma (Hopper only)
 #endif
+// Phase 3: low-precision formats via the sm_120 mma path (gemm_mma_fp8.cu, cublaslt_fp8.cu)
+void launch_mma_fp8     (const float*,const float*,float*,int,int,int); // E4M3, mma.m16n8k32
+void launch_cublaslt_fp8(const float*,const float*,float*,int,int,int); // cuBLASLt FP8 baseline
+#ifdef BUILD_SM120A
+void launch_mma_fp4     (const float*,const float*,float*,int,int,int); // E2M1 unpacked (kind::f8f6f4)
+void launch_mma_mxfp4   (const float*,const float*,float*,int,int,int); // packed E2M1 + block scale (kind::mxf4)
+#endif
 
 struct Kern{ const char* name; void(*fn)(const float*,const float*,float*,int,int,int); };
 
@@ -62,7 +69,12 @@ int main(int argc,char**argv){
 #ifdef HAVE_CUTLASS_SM90
                 {"cutlass_sm90",launch_cutlass_sm90},
 #endif
-                {"cublas",launch_cublas},{"cublas_tf32",launch_cublas_tf32},{"cublas_tc",launch_cublas_tc}};
+                {"mma_fp8",launch_mma_fp8},
+#ifdef BUILD_SM120A
+                {"mma_fp4",launch_mma_fp4},{"mma_mxfp4",launch_mma_mxfp4},
+#endif
+                {"cublas",launch_cublas},{"cublas_tf32",launch_cublas_tf32},{"cublas_tc",launch_cublas_tc},
+                {"cublaslt_fp8",launch_cublaslt_fp8}};
   struct Row{ const char* name; float ms, tf; double err; };
   std::vector<Row> rows;
   std::vector<float> hC(M*N);

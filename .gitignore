@@ -5,3 +5,4 @@ results/_profile_tmp.csv
 results/*.nsys-rep
 results/*.ncu-rep
 results/*.sqlite
+build*/
