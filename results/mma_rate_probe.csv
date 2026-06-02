@@ -1,0 +1,18 @@
+# NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition, 188 SMs, 8 warps/block, 8 chains, 32768 iters
+rep,variant,ms_per_launch,tflops,flop_per_sm_clk,power_w
+0,f16acc,3.668,440.3,1023.7,298.9
+0,f32acc,3.768,428.6,1023.8,295.6
+1,f16acc,3.638,443.9,1023.7,301.8
+1,f32acc,3.781,427.1,1023.8,297.7
+2,f16acc,3.668,440.3,1023.7,301.6
+2,f32acc,3.784,426.7,1023.8,297.7
+3,f16acc,3.668,440.3,1023.7,302.3
+3,f32acc,3.796,425.4,1023.8,298.0
+4,f16acc,3.667,440.4,1023.7,301.4
+4,f32acc,3.798,425.2,1023.8,298.5
+# median_f16acc_tflops,440.3
+# median_f32acc_tflops,426.7
+# median_f16acc_flop_per_sm_clk,1023.7
+# median_f32acc_flop_per_sm_clk,1023.8
+# ratio_f32_over_f16_raw,0.969
+# ratio_f32_over_f16_per_clock,1.000

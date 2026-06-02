@@ -188,22 +188,32 @@ repo's own kernels, so every external claim becomes a measured row in `results/b
     itself a finding (clock governance, shared-box interference, version drift). These rows
     become the honest ceiling for Phase 3's own FP8 work.
 
-- [ ] **FP32-accumulate tensor rate on the RTX PRO 6000 — direct microbenchmark (closes the
+- [x] **FP32-accumulate tensor rate on the RTX PRO 6000 — direct microbenchmark (closes the
   one open physics question in this repo's peak arithmetic).**
   All FP16/FP8/FP4 kernels here accumulate in FP32. Consumer GB202 (RTX 5090) runs
   FP16-input/FP32-accumulate at **half** the FP16-accumulate tensor rate; whether the
   workstation RTX PRO 6000 (same GB202 die) is full-rate or half-rate is not public. The repo
-  currently infers "full-rate" from "measured 243 TFLOP/s exceeds our own half-rate estimate
+  previously inferred "full-rate" from "measured 243 TFLOP/s exceeds our own half-rate estimate
   (~220)" (`results/mma_ablation.md`, `VALIDATION.md`) — a weak inference, since that estimate
   is itself clock-dependent. The headline claim (106% of cuBLAS-TC) is relative and survives
   either way, but every "% of theoretical peak" denominator depends on which rate is true.
   - **Question:** is dense FP16-in/FP32-acc `mma.sync` on this card full-rate or half-rate
     relative to FP16-in/FP16-acc?
-  - **Method:** pure register-resident back-to-back `mma.sync.aligned.m16n8k16` loop (no memory
-    traffic, no shared-memory loads), one block per SM, two variants differing only in the
-    accumulator type (`.f32` vs `.f16`); measure instruction throughput at recorded SM clocks;
-    report the ratio.
-  - **Read-out:** FP32-acc : FP16-acc rate ratio (1.0 = full-rate, 0.5 = half-rate). Either
-    answer fixes the peak denominators in README/VALIDATION. Half-rate would mean both our
-    kernel and cuBLAS-TC sit near 100% of the FP32-acc ceiling — itself a notable finding
-    worth its own writeup.
+  - **Method (as run):** register-resident back-to-back `mma.sync.aligned.m16n8k16` loop (no
+    global/shared-memory traffic in the timed loop), one block per SM × 8 warps, 8 independent
+    accumulator chains per warp; two kernels differing only in accumulator type (`.f32` vs
+    `.f16`); 5 interleaved reps of 200 back-to-back launches (~0.7 s sustained each) so both
+    variants see the same power-cap clock regime. Per-clock rate measured with in-kernel
+    `clock64()` cycles — immune to clock oscillation; wall-clock TFLOP/s and NVML power kept
+    as the session record. Code: `src/mma_rate_probe.cu`; run: `scripts/run_rate_probe.sh`;
+    raw data: `results/mma_rate_probe.csv` + `results/clock_state_rate_probe.txt`.
+  - **Result: FULL-RATE — both variants land exactly at spec, 1024 FLOP/SM/clk.**
+    f16-acc 1023.7 vs f32-acc 1023.8 FLOP/SM/clk → per-clock ratio **1.000** (raw wall-clock
+    ratio 0.969). The workstation GB202 does **not** halve FP32-accumulate throughput like the
+    consumer RTX 5090 — the existing peak denominators are confirmed by direct measurement:
+    FP16 dense peak = 188 SMs × 1024 FLOP/clk × ~2.3 GHz sustained ≈ **440 TFLOP/s** (measured
+    440.3). Secondary finding: at the 300 W cap the FP32-acc variant clocks **~3.1% lower**
+    (426.7 vs 440.3 TFLOP/s) — wider accumulators draw more power, so full-rate still costs
+    a few percent of *sustained* (not per-clock) throughput. Updated "% of measured peak":
+    `mma_warptile` 55.2%, cuBLAS-TC 52.1%, `mma_fp8` 57.2% (of 2× peak), `mma_mxfp4` 56.4%
+    (of 4× peak).

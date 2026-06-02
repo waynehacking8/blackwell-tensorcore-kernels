@@ -58,7 +58,7 @@ Clock/power: 300 W Max-Q cap reached, avg SM clock 2.06 GHz (`clock_state_phase3
 |---|---|---|
 | FP8 math correct | max_abs_err 1.4 identical to cuBLASLt FP8 (same quantized inputs, same K) | ✓ |
 | FP4 math correct | mma_fp4 (QMMA) and mma_mxfp4 (OMMA.SF) produce identical max_abs_err (5.97) through two different instructions | ✓ |
-| Throughput plausibility | 2.09× / 4.11× vs FP16 = hardware spec 2× and ~4×; ours stays ~54% of peak at all precisions (cuBLAS-TC: 51%; cuBLASLt FP8: 62%) | ✓ |
+| Throughput plausibility | 2.09× / 4.11× vs FP16 = hardware spec 2× and ~4×; ours stays 55–57% of the measured peak at all precisions (cuBLAS-TC: 52%; cuBLASLt FP8: 63%) — peak measured directly by the Phase 4 rate probe (`mma_rate_probe.csv`: full-rate FP32-acc, 440.3 TFLOP/s × format multiplier) | ✓ |
 | Bit alignment of `kind::f8f6f4` | bug caught & fixed: E2M1 in bits [5:2], not [3:0] — wrong packing gave max_abs_err 82.6 (~20×) | ✓ documented |
 | Baseline continuity | same-session FP16 rows reproduce committed values within −0.8% (mma_warptile) / −1.0% (cublas_tc) | ✓ |
 | Clock state | 300 W Max-Q cap reached during sweep; avg SM clock 2.06 GHz | recorded |

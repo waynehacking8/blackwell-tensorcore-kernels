@@ -33,6 +33,11 @@ else()
   message(STATUS "cutlass_sm90 kernel disabled (set -DCUTLASS_DIR=... and -DCMAKE_CUDA_ARCHITECTURES=90a)")
 endif()
 
+# Phase 4: FP32-accumulate tensor rate probe (standalone; register-resident, no memory traffic).
+add_executable(mma_rate_probe src/mma_rate_probe.cu)
+target_include_directories(mma_rate_probe PRIVATE include)
+target_link_libraries(mma_rate_probe PRIVATE nvidia-ml)
+
 add_executable(gemm_bench ${BENCH_SOURCES})
 target_include_directories(gemm_bench PRIVATE include)
 if(CUTLASS_DIR AND CMAKE_CUDA_ARCHITECTURES MATCHES "90a")

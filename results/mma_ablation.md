@@ -78,12 +78,14 @@ for this shape. Our 128×128 tile with a 2-stage pipeline is simply better match
 
 **What it does NOT mean:** we are *not* at 106% of the hardware. Whether GB202's
 FP16→FP32-accumulate Tensor Core rate is full-rate (512 FMA/SM/clk, like datacenter parts) or
-half-rate (256, like GeForce parts) is not public for the RTX PRO 6000; at the governed
-~2.3 GHz those correspond to ~440 or ~220 TFLOP/s dense peaks. Our 243 TFLOP/s exceeding the
-half-rate figure indicates the workstation part is **not** half-rate, and against a full-rate
-peak both our kernel (~55%) and cuBLAS (~52%) have ample headroom. The honest claim stays
-relative: **106% of the cuBLAS-TC ceiling on this card** — the same ceiling every other
-number in this repo is quoted against.
+half-rate (256, like GeForce parts) is not public for the RTX PRO 6000 — so we measured it
+directly (Phase 4 probe, `src/mma_rate_probe.cu`): a register-resident back-to-back `mma.sync`
+loop executes **1023.7 FLOP/SM/clk with FP16 accumulate and 1023.8 with FP32 accumulate** —
+per-clock ratio 1.000, i.e. **the workstation part is full-rate**, unlike the consumer RTX 5090.
+The measured dense peak at the sustained power-capped clock is **440.3 TFLOP/s**
+(`results/mma_rate_probe.csv`), so our kernel sits at **55.2%** of peak and cuBLAS at 52.1% —
+both have ample headroom. The honest claim stays relative: **106% of the cuBLAS-TC ceiling on
+this card** — the same ceiling every other number in this repo is quoted against.
 
 ## What this says about the Phase 1 result
 

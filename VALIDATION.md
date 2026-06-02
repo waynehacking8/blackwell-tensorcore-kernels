@@ -16,8 +16,10 @@ Workstation Edition** (`sm_120`, 300 W Max-Q), CUDA 12.8, FP32 inputs, cuBLAS as
 ## Clock state — why absolute TFLOP/s sit below the hardware peak
 
 The absolute numbers here (cuBLAS-TC ~228, our WMMA ~103 TFLOP/s) are **well below** the
-Blackwell FP16/FP32-acc hardware peak (≳1 PFLOP/s class with 2:4 sparsity; roughly half that dense). We verified this is **clock
-governance, not a measurement or kernel bug**, by direct sampling during the GEMM:
+Blackwell FP16/FP32-acc hardware peak — directly measured at **440.3 TFLOP/s dense** on this
+card at the sustained power-capped clock (Phase 4 rate probe, below; the ≳1 PFLOP/s marketing
+figure is with 2:4 sparsity at boost clocks). We verified this is **clock governance, not a
+measurement or kernel bug**, by direct sampling during the GEMM:
 
 | metric | value during GEMM | ceiling | note |
 |---|---|---|---|
@@ -165,10 +167,10 @@ The Phase 2 hand-written `mma.sync` kernel (`mma_warptile`, `src/gemm_mma.cu`) m
 
 **Scope of the claim (kept honest):** the kernel beats *the kernel cuBLAS chooses to dispatch*
 on sm_120 (an sm_80-generation CUTLASS kernel, 128×64 tile) — it does **not** beat the hardware
-peak. GB202's FP16→FP32-acc dense peak at the governed ~2.3 GHz is ~440 TFLOP/s if the
-workstation part runs full-rate Tensor Cores (our 243 exceeding the half-rate figure of ~220
-indicates it is full-rate); both our kernel (~55% of that) and cuBLAS (~52%) leave headroom.
-Full analysis: `results/mma_ablation.md`.
+peak. GB202's FP16→FP32-acc dense peak is **measured directly** by the Phase 4 rate probe
+(`src/mma_rate_probe.cu`, below): **440.3 TFLOP/s** at the sustained power-capped clock
+(1024 FLOP/SM/clk — confirmed full-rate, not the consumer GB202's half-rate). Both our kernel
+(**55.2%** of that) and cuBLAS (52.1%) leave headroom. Full analysis: `results/mma_ablation.md`.
 
 ## Phase 3 FP8/FP4 kernels — throughput ratios vs hardware spec
 
@@ -179,7 +181,7 @@ The Phase 3 kernels (`src/gemm_mma_fp8.cu`, sm_120a build) claim **2.09× (FP8)*
 |---|---|---|
 | FP8 ratio vs spec | 5th-gen TC spec: FP8 = 2× FP16. Measured: 503.7 / 241.5 = **2.09×** | ✓ |
 | FP4 ratio vs spec | packed FP4 = 4× FP16. Measured: 992.6 / 241.5 = **4.11×** | ✓ |
-| Constant fraction of peak | ours = ~54% of (estimated full-rate) peak at FP16, FP8 and FP4; cuBLAS-TC = 51%, cuBLASLt FP8 = 62% — no precision is anomalous | ✓ |
+| Constant fraction of peak | ours = 55–57% of the **measured** full-rate peak at FP16, FP8 and FP4 (440.3 TFLOP/s × format multiplier); cuBLAS-TC = 52%, cuBLASLt FP8 = 63% — no precision is anomalous | ✓ |
 | FP8 math correctness | max_abs_err = 1.4 bit-identical to cuBLASLt FP8 (same E4M3 quantized inputs, same K) | ✓ |
 | FP4 math correctness | `mma_fp4` (QMMA, unpacked) and `mma_mxfp4` (OMMA.SF, packed + block-scale) agree exactly (max_abs_err 5.97) through two different instruction paths | ✓ |
 | Library baseline | cuBLASLt FP8 (E4M3, TN layout) = 553.5 TFLOP/s; ours = 91.0% of it — reported as-is, not hidden | ✓ |
@@ -190,6 +192,28 @@ Caveats stated in `results/phase3_lowprec.md`: MXFP4 block-scale factors are fed
 per-tensor (not per-32-block) input scaling — throughput-identical; accuracy generalizes only
 to data without per-block outliers. cuBLAS has no FP4 GEMM on sm_120, so the MXFP4 number has
 no library ceiling to compare against.
+
+## Phase 4 rate probe — the peak denominator is measured, not estimated
+
+All "% of peak" figures above divide by a theoretical peak that assumes the workstation GB202
+runs FP16-in/FP32-acc at **full rate** (1024 FLOP/SM/clk). The consumer GB202 (RTX 5090) runs
+it at **half** rate, and no public spec exists for the RTX PRO 6000. The Phase 4 microbenchmark
+(`src/mma_rate_probe.cu`, raw data `results/mma_rate_probe.csv`) measures it directly:
+
+| check | evidence | verdict |
+|---|---|---|
+| Probe measures the instruction, not memory | register-resident `mma.sync.m16n8k16` loop, no global/shared traffic in the timed region; SASS shows 512 back-to-back HMMA per loop | ✓ |
+| ILP saturates the pipe | 8 independent accumulator chains/warp · 8 warps/SM (one block/SM, `__launch_bounds__` enforced) | ✓ |
+| Clock-oscillation immunity | per-clock rate from in-kernel `clock64()` cycles; identical to 0.01% across all 5 interleaved reps | ✓ |
+| FP16-acc rate | **1023.7 FLOP/SM/clk** ≈ 1024 spec | ✓ |
+| FP32-acc rate | **1023.8 FLOP/SM/clk** → ratio **1.000** → **full-rate** | ✓ |
+| Wall-clock cross-check | 440.3 TFLOP/s = 188 SM × 1023.7 × 2.286 GHz observed sustained clock | ✓ |
+| Power-cap effect isolated | FP32-acc draws more power → sustained clock ~3.1% lower (426.7 vs 440.3 TFLOP/s); per-clock identical | ✓ |
+
+**Consequences for the numbers above:** peak = **440.3 TFLOP/s** (FP16/FP32-acc dense, 300 W
+sustained). `mma_warptile` = 55.2% of peak, cuBLAS-TC = 52.1%, `mma_fp8` = 57.2% of 2× peak,
+`mma_mxfp4` = 56.4% of 4× peak. The previous "~440 if full-rate" inference is replaced by direct
+measurement.
 
 ## H100 (sm_90) cross-check — does any of this transfer?
 

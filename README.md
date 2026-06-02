@@ -55,6 +55,7 @@ src/gemm_mma.cu        # hand-written raw mma.sync m16n8k16 GEMM — 5-step abla
 src/cutlass_sm90.cu    # CUTLASS 3.x TMA + wgmma GEMM, Hopper only (Phase 2.5)
 src/gemm_mma_fp8.cu    # FP8 (E4M3) / FP4 (E2M1) / MXFP4 GEMM via the sm_120 mma path (Phase 3)
 src/cublaslt_fp8.cu    # cuBLASLt FP8 baseline — the library FP8 ceiling (Phase 3)
+src/mma_rate_probe.cu  # FP32-acc vs FP16-acc tensor rate microbenchmark — measures the peak (Phase 4)
 include/mma_ptx.cuh    # the PTX building blocks: mma.sync, ldmatrix, XOR swizzle, cp.async
 src/reference.cu       # cuBLAS FP32 ceiling (cublasSgemm, CUDA cores)
 src/cublas_tc.cu       # cuBLAS Tensor Core ceiling (cublasGemmEx, FP16 in / FP32 acc) — same precision as wmma/mma
@@ -248,8 +249,9 @@ of accuracy (max_abs_err 0.011 → 1.4 → 6.0 at K=8192). Three findings worth 
   the gap is xmma's instruction-level scheduling. Register-pipelined fragments (this kernel's
   mainloop) buy 493 → 504; the last 9% needs finer interleaving.
 - **cuBLAS has no FP4 GEMM on sm_120** (no public ceiling exists) — the 993 TFLOP/s MXFP4 row
-  is this card's first-hand FP4 data point, at ~56% of the theoretical FP4 peak (a throughput
-  data point — see footnote ¹ on the per-tensor block-scale caveat).
+  is this card's first-hand FP4 data point, at 56.4% of the measured FP4 peak (4× the directly
+  measured FP16 peak — see the Phase 4 rate probe below; throughput data point only, see
+  footnote ¹ on the per-tensor block-scale caveat).
 
 ### Measured on H100 80GB SXM5 (sm_90, CUDA 13.1) — the cross-generation result
 
@@ -395,6 +397,28 @@ tiling, even on shapes built to have a 48%-idle final wave (`results/reference/s
 The 6.7× was measured on A100 (108 SMs) against constructed worst cases; H100's 132 SMs shrink
 the relative tail, and the Stream-K reduction overhead eats what remains. Negative
 reproductions are reported as such — that is what the reference rows are for.
+
+### The peak denominator, measured: FP32-accumulate is full-rate on this card (Phase 4)
+
+Every "% of theoretical peak" in this repo divides by an FP16 peak that assumes the workstation
+GB202 runs FP16-in/**FP32-acc** at full rate. The consumer GB202 (RTX 5090) runs it at **half**
+rate, and no public spec exists for the RTX PRO 6000 — so the repo measures it directly: a
+register-resident, memory-free `mma.sync.m16n8k16` loop (one block per SM, 8 warps, 8 independent
+accumulator chains per warp), in two variants that differ **only** in accumulator type
+(`src/mma_rate_probe.cu`; run: `scripts/run_rate_probe.sh`; raw data:
+`results/mma_rate_probe.csv`).
+
+| variant | FLOP/SM/clk (from in-kernel `clock64()`) | wall-clock TFLOP/s @ 300 W cap |
+|---|---|---|
+| FP16-in / **FP16-acc** | 1023.7 | 440.3 |
+| FP16-in / **FP32-acc** | 1023.8 | 426.7 |
+
+Both variants hit the 1024 FLOP/SM/clk spec rate exactly: **FP32 accumulation is full-rate on
+the RTX PRO 6000** (per-clock ratio 1.000), unlike the consumer RTX 5090. The only cost of the
+wider accumulator is power — under the 300 W Max-Q cap the FP32-acc variant sustains ~3% lower
+clocks. This pins the peak denominators used throughout: **FP16 dense ≈ 440 TFLOP/s** at the
+sustained power-capped clock, FP8 ≈ 880, MXFP4 ≈ 1761 — so `mma_warptile` (243.2) = **55.2%**
+of peak, `mma_fp8` (503.7) = 57.2%, `mma_mxfp4` (992.6) = 56.4%, cuBLAS-TC (229.2) = 52.1%.
 
 ## References
 - [NVIDIA CUTLASS](https://github.com/NVIDIA/cutlass) — the production reference for Tensor Core GEMM.
