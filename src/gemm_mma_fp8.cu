@@ -1,7 +1,8 @@
 // Phase 3 — Blackwell low-precision GEMM on the sm_120 mma path (FP8 / FP4 / MXFP4).
 // Built directly on the Phase 2 mma.sync kernel (gemm_mma.cu): same 128x128 CTA tile,
 // 64x64 warp tile, XOR-swizzled smem, 16-byte cp.async, 2-stage pipeline — only the
-// instruction (and operand width) changes:
+// instruction (and operand width) changes — plus a register-pipelined mainloop
+// (fragments for k-step i+1 load while the mma for k-step i runs):
 //
 //   mma_fp8     mma.m16n8k32 e4m3   QMMA.16832 SASS   1 byte/elem    sm_120
 //   mma_fp4     mma.m16n8k32 e2m1   QMMA.16832 SASS   1 byte/elem    sm_120a (kind::f8f6f4)
@@ -21,6 +22,7 @@
 #include <cuda_fp8.h>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include "util.cuh"
 #include "mma_ptx.cuh"
 
@@ -84,12 +86,11 @@ __global__ void q_mxfp4_t(const float* in, uint8_t* out, int K, int N, float sca
 //   K-step: FP8/FP4 = 32 elems (32 B); MXFP4 = 64 elems (32 B) -> always 32 B.
 //   2 k-steps per slab, both A and B^T 128x64 B = 16 KB/stage.
 // ---------------------------------------------------------------------------
-template <Fmt FMT, int STAGES>
-__global__ void __launch_bounds__(128) gemm_lowprec_t(
+template <Fmt FMT, int STAGES, int BM = 128, int BN = 128>
+__global__ void __launch_bounds__((BM / 64) * (BN / 64) * 32) gemm_lowprec_t(
     const uint8_t* __restrict__ A,   // M x K, row-major (packed for MXFP4)
     const uint8_t* __restrict__ Bt,  // N x K, row-major = B transposed (packed for MXFP4)
     float* __restrict__ C, int M, int N, int K) {
-  constexpr int BM = 128, BN = 128;
   constexpr int KB = 64;                                      // bytes per smem row
   constexpr int EPB = (FMT == Fmt::MXFP4) ? 2 : 1;            // elements per byte
   constexpr int KSTEP_B = 32;                                 // bytes per k-step (all formats)
@@ -115,64 +116,88 @@ __global__ void __launch_bounds__(128) gemm_lowprec_t(
 
   // global -> shared: BM rows of A and BN rows of B^T, KB bytes per row per slab
   auto load_slab = [&](int s, int kb0) {
-    constexpr int CH = BM * CPR;  // 16-byte chunks per matrix per slab
 #pragma unroll
-    for (int i = tid; i < CH; i += NTHREADS) {
+    for (int i = tid; i < BM * CPR; i += NTHREADS) {
       int row = i / CPR, chunk = i % CPR;
       cp_async_16(&As[s][smem_off_b<CPR, true>(row, chunk * 16)],
                   &A[(size_t)(blockRow + row) * Kb + kb0 + chunk * 16]);
+    }
+#pragma unroll
+    for (int i = tid; i < BN * CPR; i += NTHREADS) {
+      int row = i / CPR, chunk = i % CPR;
       cp_async_16(&Bs[s][smem_off_b<CPR, true>(row, chunk * 16)],
                   &Bt[(size_t)(blockCol + row) * Kb + kb0 + chunk * 16]);
     }
   };
 
   const int numSlabs = Kb / KB;
-#pragma unroll
-  for (int s = 0; s < STAGES - 1; s++) {
-    if (s < numSlabs) load_slab(s, s * KB);
-    cp_async_commit();
-  }
 
   int lr, lc;
   ldmatrix_lane_rc(lane, lr, lc);
   const int lcb = lc * 2;  // ldmatrix lane column offset in BYTES (b16 units -> bytes)
 
-  for (int t = 0; t < numSlabs; t++) {
-    int cur = t % STAGES, fetch = t + STAGES - 1;
-    if (fetch < numSlabs) load_slab(fetch % STAGES, fetch * KB);
-    cp_async_commit();
-    cp_async_wait<STAGES - 1>();
-    __syncthreads();
+  // Register-pipelined mainloop (xmma/CUTLASS style): fragments for k-step i+1 are
+  // loaded from smem while the mma for k-step i runs, so ldmatrix latency hides
+  // behind QMMA/OMMA latency. Double-buffered fragments (~64 extra regs/thread,
+  // still <=255 -> occupancy unchanged at 2 CTAs/SM).
+  unsigned afrag[2][MITER][4], bfrag[2][NITER][2];
 
-    const uint8_t* As_c = As[cur];
-    const uint8_t* Bs_c = Bs[cur];
-
+  auto load_frags = [&](int buf, const uint8_t* As_c, const uint8_t* Bs_c, int kk) {
 #pragma unroll
-    for (int kk = 0; kk < KB; kk += KSTEP_B) {
-      // A fragments: one ldmatrix.x4 per m16 tile (16 rows x 32 bytes)
-      unsigned afrag[MITER][4];
+    for (int im = 0; im < MITER; im++)
+      ldmatrix_x4(afrag[buf][im], (const half*)&As_c[smem_off_b<CPR, true>(wm * WM + im * 16 + lr, kk + lcb)]);
 #pragma unroll
-      for (int im = 0; im < MITER; im++)
-        ldmatrix_x4(afrag[im], (const half*)&As_c[smem_off_b<CPR, true>(wm * WM + im * 16 + lr, kk + lcb)]);
-      // B fragments: one ldmatrix.x4 per PAIR of n8 tiles (16 N-rows x 32 bytes), non-trans
-      unsigned bfrag[NITER][2];
-#pragma unroll
-      for (int in = 0; in < NITER; in += 2) {
-        unsigned r4[4];
-        ldmatrix_x4(r4, (const half*)&Bs_c[smem_off_b<CPR, true>(wn * WN + in * 8 + lr, kk + lcb)]);
-        bfrag[in][0] = r4[0];     bfrag[in][1] = r4[2];
-        bfrag[in + 1][0] = r4[1]; bfrag[in + 1][1] = r4[3];
-      }
-#pragma unroll
-      for (int im = 0; im < MITER; im++)
-#pragma unroll
-        for (int in = 0; in < NITER; in++) {
-          if (FMT == Fmt::FP8)        mma_m16n8k32_e4m3(acc[im][in], afrag[im], bfrag[in]);
-          else if (FMT == Fmt::FP4)   mma_m16n8k32_e2m1(acc[im][in], afrag[im], bfrag[in]);
-          else                        mma_m16n8k64_mxf4(acc[im][in], afrag[im], bfrag[in]);
-        }
+    for (int in = 0; in < NITER; in += 2) {
+      unsigned r4[4];
+      ldmatrix_x4(r4, (const half*)&Bs_c[smem_off_b<CPR, true>(wn * WN + in * 8 + lr, kk + lcb)]);
+      bfrag[buf][in][0] = r4[0];     bfrag[buf][in][1] = r4[2];
+      bfrag[buf][in + 1][0] = r4[1]; bfrag[buf][in + 1][1] = r4[3];
     }
-    __syncthreads();
+  };
+  auto mma_step = [&](int buf) {
+#pragma unroll
+    for (int im = 0; im < MITER; im++)
+#pragma unroll
+      for (int in = 0; in < NITER; in++) {
+        if (FMT == Fmt::FP8)        mma_m16n8k32_e4m3(acc[im][in], afrag[buf][im], bfrag[buf][in]);
+        else if (FMT == Fmt::FP4)   mma_m16n8k32_e2m1(acc[im][in], afrag[buf][im], bfrag[buf][in]);
+        else                        mma_m16n8k64_mxf4(acc[im][in], afrag[buf][im], bfrag[buf][in]);
+      }
+  };
+
+  // prologue: stage the first STAGES slabs, then preload k-step 0 fragments of slab 0
+#pragma unroll
+  for (int s = 0; s < STAGES; s++) {
+    if (s < numSlabs) load_slab(s, (size_t)s * KB);
+    cp_async_commit();
+  }
+  cp_async_wait<STAGES - 1>();
+  __syncthreads();
+  load_frags(0, As[0], Bs[0], 0);
+
+  int buf = 0;
+  for (int t = 0; t < numSlabs; t++) {
+    const uint8_t* As_c = As[t % STAGES];
+    const uint8_t* Bs_c = Bs[t % STAGES];
+
+    // first k-step: prefetch this slab's second k-step, then run mma on the current one
+    load_frags(buf ^ 1, As_c, Bs_c, KSTEP_B);
+    mma_step(buf);
+    buf ^= 1;
+
+    // second k-step: cross-slab boundary
+    if (t + 1 < numSlabs) {
+      cp_async_wait<STAGES - 2>();  // slab t+1 resident (STAGES-2 of the in-flight groups may stay pending)
+      __syncthreads();              // all warps done reading slab t's smem
+      if (t + STAGES < numSlabs) {  // overwrite slab t's buffer with slab t+STAGES
+        load_slab(t % STAGES, (size_t)(t + STAGES) * KB);
+      }
+      cp_async_commit();
+      // prefetch first k-step fragments of slab t+1 while computing this slab's last step
+      load_frags(buf ^ 1, As[(t + 1) % STAGES], Bs[(t + 1) % STAGES], 0);
+    }
+    mma_step(buf);
+    buf ^= 1;
   }
 
   // FP4 inputs were pre-scaled by 8 -> accumulators carry 8*8 = 64x
@@ -234,18 +259,18 @@ static void stage(Fmt fmt, const float* A, const float* B, int M, int N, int K) 
   }
 }
 
-template <Fmt FMT, int STAGES>
+template <Fmt FMT, int STAGES, int BM = 128, int BN = 128>
 static void run(const uint8_t* A, const uint8_t* Bt, float* C, int M, int N, int K) {
-  constexpr int SLAB = (128 + 128) * 64;
+  constexpr int SLAB = (BM + BN) * 64;
   size_t sh = (size_t)STAGES * SLAB;
   static bool attr_set = false;
   if (!attr_set && sh > 48 * 1024) {
-    CUDA_CHECK(cudaFuncSetAttribute(gemm_lowprec_t<FMT, STAGES>,
+    CUDA_CHECK(cudaFuncSetAttribute(gemm_lowprec_t<FMT, STAGES, BM, BN>,
                                     cudaFuncAttributeMaxDynamicSharedMemorySize, (int)sh));
     attr_set = true;
   }
-  dim3 t(128), g((N + 127) / 128, (M + 127) / 128);
-  gemm_lowprec_t<FMT, STAGES><<<g, t, sh>>>(A, Bt, C, M, N, K);
+  dim3 t((BM / 64) * (BN / 64) * 32), g((N + BN - 1) / BN, (M + BM - 1) / BM);
+  gemm_lowprec_t<FMT, STAGES, BM, BN><<<g, t, sh>>>(A, Bt, C, M, N, K);
 }
 
 }  // namespace lowprec
@@ -255,7 +280,21 @@ void launch_mma_fp8(const float* A, const float* B, float* C, int M, int N, int 
   using namespace lowprec;
   stage(Fmt::FP8, A, B, M, N, K);
   Staged& s = g_stage[(int)Fmt::FP8];
-  run<Fmt::FP8, 2>(s.A, s.Bt, C, M, N, K);
+  // Tuning history (8192^3, register-pipelined mainloop):
+  //   CTA tile:  128x128 -> 500 | 256x128 -> 470 | 128x256 -> 463 | 256x256 -> 123 (reg spill)
+  //              -> larger tiles LOSE: occupancy drops to 1 CTA/SM and the 128 MB L2 already
+  //                 feeds the 128x128 tile; reuse is not the binding constraint.
+  //   Stages:    2 -> 500.1 | 3 -> 503.8 (winner) | 4 -> 430
+  // MMA_FP8_TILE / MMA_FP8_STAGES env vars re-run those sweep points.
+  const char* t = getenv("MMA_FP8_TILE");
+  const char* st = getenv("MMA_FP8_STAGES");
+  int stages = st ? atoi(st) : 3;
+  if (t && strcmp(t, "256x128") == 0)      run<Fmt::FP8, 2, 256, 128>(s.A, s.Bt, C, M, N, K);
+  else if (t && strcmp(t, "128x256") == 0) run<Fmt::FP8, 2, 128, 256>(s.A, s.Bt, C, M, N, K);
+  else if (t && strcmp(t, "256x256") == 0) run<Fmt::FP8, 2, 256, 256>(s.A, s.Bt, C, M, N, K);
+  else if (stages == 2)                    run<Fmt::FP8, 2, 128, 128>(s.A, s.Bt, C, M, N, K);
+  else if (stages == 4)                    run<Fmt::FP8, 4, 128, 128>(s.A, s.Bt, C, M, N, K);
+  else                                     run<Fmt::FP8, 3, 128, 128>(s.A, s.Bt, C, M, N, K);
 }
 
 void launch_mma_fp4(const float* A, const float* B, float* C, int M, int N, int K) {
