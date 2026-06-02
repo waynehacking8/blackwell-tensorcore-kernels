@@ -74,3 +74,39 @@
     (max_abs_err) Pareto.
   - **Read-out:** the Pareto frontier per precision; compare against cuBLAS's FP8 path where
     available.
+
+## Phase 4 — Literature-ceiling reproductions on available hardware (specified)
+
+Goal: reproduce published ceiling numbers with the same harness and methodology used for the
+repo's own kernels, so every external claim becomes a measured row in `results/bench.csv`.
+
+- [ ] **Tawa warp-specialization compiler vs cuBLAS vs this repo's kernels (arXiv:2510.14719, CGO'26).**
+  Published target: 79% SM utilization, 1.1× over cuBLAS on H100.
+  - **Question:** can a warp-specialization compiler actually beat cuBLAS on this H100 box, and
+    where does it land relative to (a) our WMMA kernel (8.0% of nvjet) and (b) nvjet itself?
+  - **Method:** build Tawa on the H100 box; compile GEMM for the repo's benchmark shapes
+    (2048/4096/8192); add results as kernel rows; ncu-profile the generated kernel and compare
+    its stall profile against ours (MIO-queue-full) and nvjet's (WARPGROUP.ARRIVES).
+  - **Read-out:** a three-line TFLOPS-vs-shape chart (WMMA / Tawa / cuBLAS-TC). If Tawa ≥ 1.0×
+    cuBLAS, the "compilers can match hand-tuned libraries" claim is reproduced on our hardware;
+    its ncu profile shows which async-overlap mechanisms our hand-written kernel lacks.
+
+- [ ] **Stream-K work decomposition (arXiv:2301.03598) — fix the wave-quantization tail.**
+  Published target: up to 6.7× over data-parallel tiling on quantization-unfriendly shapes.
+  - **Question:** our WMMA kernel uses classic data-parallel tiling; on shapes where
+    (M/tile × N/tile) is not a multiple of SM count, how much of the loss can Stream-K's
+    K-loop splitting + atomic fixup recover?
+  - **Method:** run CUTLASS example 47 (stream-k) on a sweep including non-SM-divisible shapes;
+    optionally implement Stream-K scheduling in our own kernel; measure both on H100 and sm_120.
+  - **Read-out:** speedup vs data-parallel tiling per shape; worst-case shape variance reduction.
+
+- [ ] **Committed third-party baselines: DeepGEMM / ThunderKittens / FlashAttention-3.**
+  Published targets: DeepGEMM FP8 ~1358 TFLOPS (~78% of H100 FP8 peak); ThunderKittens FP8
+  ~1500 TFLOPS; FlashAttention-3 FP16 740 TFLOPS (75% of peak).
+  - **Question:** what do the leading open-source kernels actually achieve on *this* H100 box
+    (shared, no root, Max-Q-class power limits do not apply here but clock state does)?
+  - **Method:** run each project's own benchmark (pip/JIT installs, no root needed); record
+    numbers + clock state into `results/`; treat them as reference rows, clearly attributed.
+  - **Read-out:** measured-on-our-box vs published table. The gap between the two columns is
+    itself a finding (clock governance, shared-box interference, version drift). These rows
+    become the honest ceiling for Phase 3's own FP8 work.
