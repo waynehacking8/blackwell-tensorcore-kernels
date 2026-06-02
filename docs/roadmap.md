@@ -30,7 +30,38 @@
 ## Phase 2 — Better SIMT + Tensor Core
 - [ ] Register-blocked tiled kernel (e.g. 128x128 block, 8x8 per thread).
 - [ ] Double-buffered shared memory; bank-conflict-free layout.
-- [ ] Hand-written mma.sync (m16n8k16) replacing the WMMA wrapper.
+- [ ] **Hand-written mma.sync (m16n8k16) replacing the WMMA wrapper — test whether Boehm's
+  "~94% with standard optimizations" transfers to the Tensor Core regime.**
+  - **Question:** Boehm's ablation (2D blocktiling 68.7% → vectorize 78.4% → warptiling 93.7%
+    of cuBLAS) is FP32 SIMT data — CUDA cores. Tensor Cores consume operands ~8× faster, so
+    every feed inefficiency is amplified ~8×; and the WMMA wrapper hides fragment register
+    layout, blocking register-level pipelining. Is ≥90% of the sm_80-style cuBLAS-TC ceiling
+    (229 TFLOP/s on the Pro 6000) still reachable when the compute units are Tensor Cores?
+  - **Method:** replace WMMA with raw `mma.sync.aligned.m16n8k16` PTX (full register control),
+    then apply the standard stack step by step, benching each as a new kernel row (same
+    ablation discipline as the existing wmma progression): 128×128 CTA tile with 2×2 per-warp
+    register tiling → swizzled (bank-conflict-free) shared-memory layout → 16-byte vectorized
+    `cp.async` loads → 3/4-stage pipeline sweep.
+  - **Read-out:** the per-step ablation table vs cublas_tc. Final kernel ≥85–90% → Boehm's
+    claim transfers to the TC regime (and the WMMA wrapper was the blocker). Stalls at
+    ~60–70% → the remaining gap quantifies what CUTLASS's deeper instruction scheduling buys —
+    either result is a finding.
+
+## Phase 2.5 — Hopper wgmma (new: follows from the Phase 1 H100 result)
+- [ ] **CUTLASS 3.x / wgmma GEMM on H100 — break the WMMA ceiling with a constructive proof.**
+  - **Question:** the H100 run established that WMMA cannot exceed ~65% of peak on Hopper
+    (cannot emit `wgmma`); that conclusion currently rests on literature + ncu evidence.
+    Does a from-scratch CUTLASS 3.x kernel (CuTe, warpgroup MMA + TMA) actually recover the
+    gap — i.e., approach nvjet's 77%-of-peak?
+  - **Method:** implement the GEMM with CUTLASS 3.x `CollectiveBuilder` (sm_90, TMA + wgmma);
+    add as kernel row `cutlass_sm90`; bench at 8192³ on the H100 box (`ARCH=90`); ncu-profile
+    to confirm the kernel actually issues wgmma (top stall should become WARPGROUP.ARRIVES,
+    matching nvjet's signature).
+  - **Read-out:** % of cuBLAS-TC (nvjet, 761.7 TFLOP/s). ≥90% → the ceiling conclusion closes
+    with a constructive proof. 70–90% → quantifies the remaining CUTLASS-vs-nvjet tuning gap.
+    Also document the reversal: warp specialization (producer/consumer warpgroups) is
+    *required* in this regime — the same technique that was a measured negative result on
+    sm_120.
 
 ## Phase 3 — Blackwell formats (the frontier)
 - [ ] FP8 (E4M3) Tensor Core GEMM; quality vs FP16; throughput delta.
