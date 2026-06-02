@@ -113,8 +113,12 @@ ceilings note for the B200 references).
     (the Pareto's price axis, chart `precision_pareto_sm120.png`). Two findings:
     (1) **unpacked FP4 (kind::f8f6f4) is pointless** — 520 TFLOP/s ≈ FP8 speed at 4× worse error
     (it shares the QMMA pipe; only packed mxf4 reaches OMMA.SF and 2× FP8);
-    (2) **our FP8 = 91.0% of cuBLASLt FP8** (504 vs 554) — the FP16-winning tile shape becomes
-    feed-bound when math runs 2×; larger CTA tiles are the identified fix. cuBLAS has no FP4
+    (2) **our FP8 = 91.0% of cuBLASLt FP8** (504 vs 554) — v2 tuning tested and *rejected* the
+    larger-CTA-tile hypothesis (256×128 / 128×256 / 256×256 all measured slower: 469/463/123);
+    the gain that worked was register-level fragment double-buffering (+2.2% FP8, +4.3% MXFP4).
+    nsys shows cuBLASLt's kernel uses the *same* tile/warp/instruction config — the remaining
+    ~9% is xmma-style instruction-level interleaving inside the k-loop (see
+    `results/phase3_lowprec.md` Limitations). cuBLAS has no FP4
     path on sm_120, so the MXFP4 number is the card's only measured FP4 GEMM datapoint.
 - ~~Blackwell tcgen05 / tensor-memory GEMM~~ — **out of scope on this hardware** (sm_100 only).
 
