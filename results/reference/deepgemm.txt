@@ -1,0 +1,388 @@
+
+=============
+== PyTorch ==
+=============
+
+NVIDIA Release 26.02 (build 269443099)
+PyTorch Version 2.11.0a0+eb65b36
+Container image Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+Copyright (c) 2014-2024 Facebook Inc.
+Copyright (c) 2011-2014 Idiap Research Institute (Ronan Collobert)
+Copyright (c) 2012-2014 Deepmind Technologies    (Koray Kavukcuoglu)
+Copyright (c) 2011-2012 NEC Laboratories America (Koray Kavukcuoglu)
+Copyright (c) 2011-2013 NYU                      (Clement Farabet)
+Copyright (c) 2006-2010 NEC Laboratories America (Ronan Collobert, Leon Bottou, Iain Melvin, Jason Weston)
+Copyright (c) 2006      Idiap Research Institute (Samy Bengio)
+Copyright (c) 2001-2004 Idiap Research Institute (Ronan Collobert, Samy Bengio, Johnny Mariethoz)
+Copyright (c) 2015      Google Inc.
+Copyright (c) 2015      Yangqing Jia
+Copyright (c) 2013-2016 The Caffe contributors
+All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+NOTE: CUDA Forward Compatibility mode ENABLED.
+  Using CUDA 13.1 driver version 590.48.01 with kernel driver version 580.159.03.
+  See https://docs.nvidia.com/deploy/cuda-compatibility/ for details.
+
+__pycache__
+generators.py
+test_attention.py
+test_bf16.py
+test_einsum.py
+test_fp8_fp4.py
+test_hyperconnection.py
+test_layout.py
+test_lazy_init.py
+test_legacy.py
+test_mega_moe.py
+test_sanitizer.py
+--- tests/test_bf16.py ---
+Library path:
+ > ['/usr/local/lib/python3.12/dist-packages/deep_gemm']
+
+Testing GEMM:
+ > Perf (m=     1, n=  2112, k=  7168, layout=NT, BF16, acc=0):    18.3 us |    2 TFLOPS | 1659 GB/s | 0.99x cuBLAS
+ > Perf (m=     1, n=  2112, k=  7168, layout=NT, BF16, acc=1):    18.2 us |    2 TFLOPS | 1666 GB/s | 1.03x cuBLAS
+ > Perf (m=     1, n=   576, k=  7168, layout=NT, BF16, acc=0):    11.3 us |    1 TFLOPS |  735 GB/s | 0.78x cuBLAS
+ > Perf (m=     1, n=   576, k=  7168, layout=NT, BF16, acc=1):    11.2 us |    1 TFLOPS |  737 GB/s | 0.81x cuBLAS
+ > Perf (m=     1, n= 24576, k=  1536, layout=NT, BF16, acc=0):    35.3 us |    2 TFLOPS | 2139 GB/s | 1.02x cuBLAS
+ > Perf (m=     1, n= 24576, k=  1536, layout=NT, BF16, acc=1):    35.4 us |    2 TFLOPS | 2134 GB/s | 1.02x cuBLAS
+ > Perf (m=     1, n= 32768, k=   512, layout=NT, BF16, acc=0):    18.1 us |    2 TFLOPS | 1862 GB/s | 1.02x cuBLAS
+ > Perf (m=     1, n= 32768, k=   512, layout=NT, BF16, acc=1):    18.2 us |    2 TFLOPS | 1850 GB/s | 1.01x cuBLAS
+ > Perf (m=     1, n=  7168, k= 16384, layout=NT, BF16, acc=0):    89.3 us |    3 TFLOPS | 2631 GB/s | 1.02x cuBLAS
+ > Perf (m=     1, n=  7168, k= 16384, layout=NT, BF16, acc=1):    89.2 us |    3 TFLOPS | 2633 GB/s | 1.02x cuBLAS
+ > Perf (m=     1, n=  4096, k=  7168, layout=NT, BF16, acc=0):    29.1 us |    2 TFLOPS | 2020 GB/s | 1.05x cuBLAS
+ > Perf (m=     1, n=  4096, k=  7168, layout=NT, BF16, acc=1):    28.9 us |    2 TFLOPS | 2033 GB/s | 1.07x cuBLAS
+ > Perf (m=     1, n=  7168, k=  2048, layout=NT, BF16, acc=0):    16.2 us |    2 TFLOPS | 1818 GB/s | 1.00x cuBLAS
+ > Perf (m=     1, n=  7168, k=  2048, layout=NT, BF16, acc=1):    16.2 us |    2 TFLOPS | 1814 GB/s | 0.98x cuBLAS
+ > Perf (m=     1, n=   256, k=  7168, layout=NT, FP32, acc=0):    10.7 us |    0 TFLOPS |  346 GB/s | 0.71x cuBLAS
+ > Perf (m=     1, n=129280, k=  7168, layout=NT, FP32, acc=0):   592.4 us |    3 TFLOPS | 3129 GB/s | 1.05x cuBLAS
+ > Perf (m=   128, n=  2112, k=  7168, layout=NT, BF16, acc=0):    20.3 us |  191 TFLOPS | 1612 GB/s | 1.00x cuBLAS
+ > Perf (m=   128, n=  2112, k=  7168, layout=NT, BF16, acc=1):    20.4 us |  190 TFLOPS | 1626 GB/s | 1.03x cuBLAS
+ > Perf (m=   128, n=   576, k=  7168, layout=NT, BF16, acc=0):    12.6 us |   84 TFLOPS |  812 GB/s | 0.89x cuBLAS
+ > Perf (m=   128, n=   576, k=  7168, layout=NT, BF16, acc=1):    12.7 us |   84 TFLOPS |  821 GB/s | 0.93x cuBLAS
+ > Perf (m=   128, n= 24576, k=  1536, layout=NT, BF16, acc=0):    37.3 us |  259 TFLOPS | 2201 GB/s | 1.01x cuBLAS
+ > Perf (m=   128, n= 24576, k=  1536, layout=NT, BF16, acc=1):    37.8 us |  255 TFLOPS | 2338 GB/s | 1.02x cuBLAS
+ > Perf (m=   128, n= 32768, k=   512, layout=NT, BF16, acc=0):    20.5 us |  209 TFLOPS | 2048 GB/s | 1.00x cuBLAS
+ > Perf (m=   128, n= 32768, k=   512, layout=NT, BF16, acc=1):    23.1 us |  186 TFLOPS | 2182 GB/s | 0.97x cuBLAS
+ > Perf (m=   128, n=  7168, k= 16384, layout=NT, BF16, acc=0):    89.8 us |  335 TFLOPS | 2684 GB/s | 1.08x cuBLAS
+ > Perf (m=   128, n=  7168, k= 16384, layout=NT, BF16, acc=1):    90.3 us |  333 TFLOPS | 2690 GB/s | 1.09x cuBLAS
+ > Perf (m=   128, n=  4096, k=  7168, layout=NT, BF16, acc=0):    30.4 us |  247 TFLOPS | 2028 GB/s | 1.01x cuBLAS
+ > Perf (m=   128, n=  4096, k=  7168, layout=NT, BF16, acc=1):    30.5 us |  246 TFLOPS | 2051 GB/s | 1.01x cuBLAS
+ > Perf (m=   128, n=  7168, k=  2048, layout=NT, BF16, acc=0):    17.1 us |  220 TFLOPS | 1854 GB/s | 0.97x cuBLAS
+ > Perf (m=   128, n=  7168, k=  2048, layout=NT, BF16, acc=1):    17.4 us |  216 TFLOPS | 1924 GB/s | 0.97x cuBLAS
+ > Perf (m=   128, n=   256, k=  7168, layout=NT, FP32, acc=0):    11.6 us |   41 TFLOPS |  488 GB/s | 0.73x cuBLAS
+ > Perf (m=   128, n=129280, k=  7168, layout=NT, FP32, acc=0):   672.3 us |  353 TFLOPS | 2858 GB/s | 0.98x cuBLAS
+ > Perf (m=  4096, n=  2112, k=  7168, layout=NT, BF16, acc=0):   161.0 us |  770 TFLOPS |  660 GB/s | 0.96x cuBLAS
+ > Perf (m=  4096, n=  2112, k=  7168, layout=NT, BF16, acc=1):   163.9 us |  757 TFLOPS |  754 GB/s | 0.96x cuBLAS
+ > Perf (m=  4096, n=   576, k=  7168, layout=NT, BF16, acc=0):    51.4 us |  658 TFLOPS | 1394 GB/s | 0.90x cuBLAS
+ > Perf (m=  4096, n=   576, k=  7168, layout=NT, BF16, acc=1):    52.7 us |  642 TFLOPS | 1450 GB/s | 0.89x cuBLAS
+ > Perf (m=  4096, n= 24576, k=  1536, layout=NT, BF16, acc=0):   403.4 us |  767 TFLOPS |  717 GB/s | 1.00x cuBLAS
+ > Perf (m=  4096, n= 24576, k=  1536, layout=NT, BF16, acc=1):   469.1 us |  659 TFLOPS | 1046 GB/s | 0.95x cuBLAS
+ > Perf (m=  4096, n= 32768, k=   512, layout=NT, BF16, acc=0):   212.1 us |  648 TFLOPS | 1444 GB/s | 1.01x cuBLAS
+ > Perf (m=  4096, n= 32768, k=   512, layout=NT, BF16, acc=1):   333.9 us |  412 TFLOPS | 1721 GB/s | 0.94x cuBLAS
+ > Perf (m=  4096, n=  7168, k= 16384, layout=NT, BF16, acc=0):  1167.0 us |  824 TFLOPS |  367 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=  7168, k= 16384, layout=NT, BF16, acc=1):  1170.0 us |  822 TFLOPS |  416 GB/s | 1.00x cuBLAS
+ > Perf (m=  4096, n=  4096, k=  7168, layout=NT, BF16, acc=0):   293.9 us |  818 TFLOPS |  514 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=  4096, k=  7168, layout=NT, BF16, acc=1):   297.7 us |  808 TFLOPS |  620 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=  7168, k=  2048, layout=NT, BF16, acc=0):   158.9 us |  757 TFLOPS |  660 GB/s | 0.97x cuBLAS
+ > Perf (m=  4096, n=  7168, k=  2048, layout=NT, BF16, acc=1):   175.3 us |  686 TFLOPS |  933 GB/s | 0.95x cuBLAS
+ > Perf (m=  4096, n=   256, k=  7168, layout=NT, FP32, acc=0):    37.7 us |  399 TFLOPS | 1766 GB/s | 0.96x cuBLAS
+ > Perf (m=  4096, n=129280, k=  7168, layout=NT, FP32, acc=0): 11247.0 us |  675 TFLOPS |  358 GB/s | 0.90x cuBLAS
+ > Perf (m=  4096, n=  7168, k=  2112, layout=NN, BF16, acc=0):   163.2 us |  760 TFLOPS |  651 GB/s | 0.98x cuBLAS
+ > Perf (m=  2112, n=  4096, k=  7168, layout=TN, FP32, acc=1):   195.5 us |  634 TFLOPS |  809 GB/s | 0.89x cuBLAS
+ > Perf (m=  2112, n=  4096, k=  7168, layout=TN, BF16, acc=0):   168.2 us |  737 TFLOPS |  632 GB/s | 0.97x cuBLAS
+ > Perf (m=  4096, n=  7168, k=   576, layout=NN, BF16, acc=0):    57.0 us |  593 TFLOPS | 1257 GB/s | 0.93x cuBLAS
+ > Perf (m=   576, n=  4096, k=  7168, layout=TN, FP32, acc=1):    71.4 us |  474 TFLOPS | 1203 GB/s | 0.72x cuBLAS
+ > Perf (m=   576, n=  4096, k=  7168, layout=TN, BF16, acc=0):    74.8 us |  452 TFLOPS |  958 GB/s | 0.65x cuBLAS
+ > Perf (m=  4096, n=  1536, k= 24576, layout=NN, BF16, acc=0):   372.7 us |  830 TFLOPS |  776 GB/s | 1.00x cuBLAS
+ > Perf (m= 24576, n=  4096, k=  1536, layout=TN, FP32, acc=1):   673.4 us |  459 TFLOPS | 1327 GB/s | 0.86x cuBLAS
+ > Perf (m= 24576, n=  4096, k=  1536, layout=TN, BF16, acc=0):   400.0 us |  773 TFLOPS |  723 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=   512, k= 32768, layout=NN, BF16, acc=0):   218.1 us |  630 TFLOPS | 1404 GB/s | 0.83x cuBLAS
+ > Perf (m= 32768, n=  4096, k=   512, layout=TN, FP32, acc=1):   600.1 us |  229 TFLOPS | 1852 GB/s | 0.88x cuBLAS
+ > Perf (m= 32768, n=  4096, k=   512, layout=TN, BF16, acc=0):   217.7 us |  631 TFLOPS | 1407 GB/s | 0.96x cuBLAS
+ > Perf (m=  4096, n= 16384, k=  7168, layout=NN, BF16, acc=0):  1181.0 us |  815 TFLOPS |  362 GB/s | 1.02x cuBLAS
+ > Perf (m=  7168, n=  4096, k= 16384, layout=TN, FP32, acc=1):  1354.0 us |  711 TFLOPS |  446 GB/s | 0.87x cuBLAS
+ > Perf (m=  7168, n=  4096, k= 16384, layout=TN, BF16, acc=0):  1161.0 us |  829 TFLOPS |  368 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=  7168, k=  4096, layout=NN, BF16, acc=0):   299.8 us |  802 TFLOPS |  504 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=  4096, k=  7168, layout=TN, FP32, acc=1):   376.3 us |  639 TFLOPS |  669 GB/s | 0.81x cuBLAS
+ > Perf (m=  4096, n=  4096, k=  7168, layout=TN, BF16, acc=0):   291.3 us |  826 TFLOPS |  518 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=  2048, k=  7168, layout=NN, BF16, acc=0):   149.4 us |  805 TFLOPS |  702 GB/s | 0.98x cuBLAS
+ > Perf (m=  7168, n=  4096, k=  2048, layout=TN, FP32, acc=1):   246.9 us |  487 TFLOPS | 1138 GB/s | 0.83x cuBLAS
+ > Perf (m=  7168, n=  4096, k=  2048, layout=TN, BF16, acc=0):   156.9 us |  766 TFLOPS |  668 GB/s | 0.98x cuBLAS
+ > Perf (m=  4096, n=  7168, k=   256, layout=NN, BF16, acc=0):    34.7 us |  433 TFLOPS | 1859 GB/s | 0.89x cuBLAS
+ > Perf (m=   256, n=  4096, k=  7168, layout=TN, FP32, acc=1):    36.3 us |  414 TFLOPS | 1951 GB/s | 1.00x cuBLAS
+ > Perf (m=   256, n=  4096, k=  7168, layout=TN, BF16, acc=0):    35.2 us |  427 TFLOPS | 1834 GB/s | 1.01x cuBLAS
+ > Perf (m=  4096, n=  7168, k=129280, layout=NN, BF16, acc=0):  9950.0 us |  763 TFLOPS |  299 GB/s | 0.98x cuBLAS
+ > Perf (m=129280, n=  4096, k=  7168, layout=TN, FP32, acc=1): 11831.0 us |  642 TFLOPS |  520 GB/s | 0.87x cuBLAS
+ > Perf (m=129280, n=  4096, k=  7168, layout=TN, BF16, acc=0):  9545.0 us |  795 TFLOPS |  311 GB/s | 1.03x cuBLAS
+Average speedup over cuBLASLt: 0.949x
+
+Testing m-grouped contiguous GEMM:
+ > Perf (num_groups=4, m=35456, n= 6144, k= 7168, layout=NT, psum=True): 3844 us |  812 TFLOPS |  337 GB/s
+ > Perf (num_groups=4, m=36096, n= 6144, k= 7168, layout=NN, psum=True): 3920 us |  811 TFLOPS |  335 GB/s
+ > Perf (num_groups=4, m=31104, n= 7168, k= 3072, layout=NT, psum=True): 1696 us |  808 TFLOPS |  479 GB/s
+ > Perf (num_groups=4, m=32896, n= 7168, k= 3072, layout=NN, psum=True): 1799 us |  805 TFLOPS |  472 GB/s
+ > Perf (num_groups=4, m=32384, n= 4096, k= 4096, layout=NT, psum=True): 1335 us |  814 TFLOPS |  498 GB/s
+ > Perf (num_groups=4, m=29184, n= 4096, k= 4096, layout=NN, psum=True): 1206 us |  812 TFLOPS |  508 GB/s
+ > Perf (num_groups=4, m=36736, n= 4096, k= 2048, layout=NT, psum=True):  774 us |  796 TFLOPS |  670 GB/s
+ > Perf (num_groups=4, m=38272, n= 4096, k= 2048, layout=NN, psum=True):  820 us |  783 TFLOPS |  655 GB/s
+ > Perf (num_groups=8, m=33280, n= 6144, k= 7168, layout=NT, psum=True): 3632 us |  807 TFLOPS |  438 GB/s
+ > Perf (num_groups=8, m=30976, n= 6144, k= 7168, layout=NN, psum=True): 3337 us |  818 TFLOPS |  458 GB/s
+ > Perf (num_groups=8, m=32768, n= 7168, k= 3072, layout=NT, psum=True): 1805 us |  800 TFLOPS |  567 GB/s
+ > Perf (num_groups=8, m=30336, n= 7168, k= 3072, layout=NN, psum=True): 1683 us |  794 TFLOPS |  578 GB/s
+ > Perf (num_groups=8, m=35584, n= 4096, k= 4096, layout=NT, psum=True): 1469 us |  813 TFLOPS |  580 GB/s
+ > Perf (num_groups=8, m=31872, n= 4096, k= 4096, layout=NN, psum=True): 1332 us |  803 TFLOPS |  594 GB/s
+ > Perf (num_groups=8, m=36224, n= 4096, k= 2048, layout=NT, psum=True):  776 us |  783 TFLOPS |  746 GB/s
+ > Perf (num_groups=8, m=28928, n= 4096, k= 2048, layout=NN, psum=True):  619 us |  784 TFLOPS |  791 GB/s
+ > Perf (num_groups=4, m=35456, n= 6144, k= 7168, layout=NT, psum=False): 3854 us |  810 TFLOPS |  336 GB/s
+ > Perf (num_groups=4, m=36096, n= 6144, k= 7168, layout=NN, psum=False): 3927 us |  810 TFLOPS |  334 GB/s
+ > Perf (num_groups=4, m=31104, n= 7168, k= 3072, layout=NT, psum=False): 1706 us |  803 TFLOPS |  477 GB/s
+ > Perf (num_groups=4, m=32896, n= 7168, k= 3072, layout=NN, psum=False): 1803 us |  804 TFLOPS |  471 GB/s
+ > Perf (num_groups=4, m=32384, n= 4096, k= 4096, layout=NT, psum=False): 1343 us |  809 TFLOPS |  495 GB/s
+ > Perf (num_groups=4, m=29184, n= 4096, k= 4096, layout=NN, psum=False): 1207 us |  811 TFLOPS |  507 GB/s
+ > Perf (num_groups=4, m=36736, n= 4096, k= 2048, layout=NT, psum=False):  775 us |  795 TFLOPS |  669 GB/s
+ > Perf (num_groups=4, m=38272, n= 4096, k= 2048, layout=NN, psum=False):  820 us |  783 TFLOPS |  655 GB/s
+ > Perf (num_groups=8, m=33280, n= 6144, k= 7168, layout=NT, psum=False): 3648 us |  804 TFLOPS |  436 GB/s
+ > Perf (num_groups=8, m=30976, n= 6144, k= 7168, layout=NN, psum=False): 3339 us |  817 TFLOPS |  458 GB/s
+ > Perf (num_groups=8, m=32768, n= 7168, k= 3072, layout=NT, psum=False): 1807 us |  799 TFLOPS |  566 GB/s
+ > Perf (num_groups=8, m=30336, n= 7168, k= 3072, layout=NN, psum=False): 1681 us |  795 TFLOPS |  579 GB/s
+ > Perf (num_groups=8, m=35584, n= 4096, k= 4096, layout=NT, psum=False): 1476 us |  809 TFLOPS |  577 GB/s
+ > Perf (num_groups=8, m=31872, n= 4096, k= 4096, layout=NN, psum=False): 1345 us |  795 TFLOPS |  588 GB/s
+ > Perf (num_groups=8, m=36224, n= 4096, k= 2048, layout=NT, psum=False):  781 us |  778 TFLOPS |  742 GB/s
+ > Perf (num_groups=8, m=28928, n= 4096, k= 2048, layout=NN, psum=False):  627 us |  774 TFLOPS |  781 GB/s
+
+Testing m-grouped masked GEMM:
+ > Perf (num_groups=32, expected_m_per_group= 192, n=6144, k=7168, psum=1): 1085 us (max: 1086 us) |  503 TFLOPS | 2750 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=7168, k=3072, psum=1):  577 us (max: 578 us) |  469 TFLOPS | 2660 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=4096, k=4096, psum=1):  433 us (max: 434 us) |  466 TFLOPS | 2708 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=4096, k=2048, psum=1):  237 us (max: 237 us) |  434 TFLOPS | 2586 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=6144, k=7168, psum=1):  784 us (max: 840 us) |  740 TFLOPS |  898 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=7168, k=3072, psum=1):  381 us (max: 425 us) |  679 TFLOPS | 1009 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=4096, k=4096, psum=1):  290 us (max: 308 us) |  716 TFLOPS | 1045 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=4096, k=2048, psum=1):  146 us (max: 164 us) |  680 TFLOPS | 1187 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=6144, k=7168, psum=1):  952 us (max: 954 us) |   58 TFLOPS | 2978 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=7168, k=3072, psum=1):  495 us (max: 496 us) |   56 TFLOPS | 2872 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=4096, k=4096, psum=1):  380 us (max: 382 us) |   55 TFLOPS | 2853 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=4096, k=2048, psum=1):  203 us (max: 203 us) |   52 TFLOPS | 2686 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=6144, k=7168, psum=1):  195 us (max: 195 us) |   55 TFLOPS | 2726 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=7168, k=3072, psum=1):  104 us (max: 104 us) |   48 TFLOPS | 2559 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=4096, k=4096, psum=1):   82 us (max:  82 us) |   47 TFLOPS | 2484 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=4096, k=2048, psum=1):   48 us (max:  48 us) |   40 TFLOPS | 2128 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=6144, k=7168, psum=0): 1087 us (max: 1088 us) |  502 TFLOPS | 2745 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=7168, k=3072, psum=0):  578 us (max: 579 us) |  468 TFLOPS | 2655 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=4096, k=4096, psum=0):  434 us (max: 435 us) |  465 TFLOPS | 2699 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=4096, k=2048, psum=0):  237 us (max: 237 us) |  433 TFLOPS | 2582 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=6144, k=7168, psum=0):  785 us (max: 841 us) |  740 TFLOPS |  897 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=7168, k=3072, psum=0):  382 us (max: 425 us) |  679 TFLOPS | 1008 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=4096, k=4096, psum=0):  290 us (max: 308 us) |  715 TFLOPS | 1043 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=4096, k=2048, psum=0):  146 us (max: 164 us) |  680 TFLOPS | 1186 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=6144, k=7168, psum=0):  934 us (max: 936 us) |   59 TFLOPS | 3035 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=7168, k=3072, psum=0):  483 us (max: 484 us) |   57 TFLOPS | 2942 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=4096, k=4096, psum=0):  370 us (max: 370 us) |   57 TFLOPS | 2932 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=4096, k=2048, psum=0):  195 us (max: 196 us) |   54 TFLOPS | 2788 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=6144, k=7168, psum=0):  187 us (max: 187 us) |   57 TFLOPS | 2847 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=7168, k=3072, psum=0):  101 us (max: 102 us) |   50 TFLOPS | 2629 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=4096, k=4096, psum=0):   82 us (max:  83 us) |   47 TFLOPS | 2468 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=4096, k=2048, psum=0):   47 us (max:  48 us) |   41 TFLOPS | 2158 GB/s
+
+Testing k-grouped contiguous GEMM:
+ > Perf (num_groups= 4, m= 4096, n= 7168, k=28416): 2337 us |  714 TFLOPS |  676 GB/s
+ > Perf (num_groups= 4, m= 7168, n= 2048, k=31744): 1331 us |  700 TFLOPS |  793 GB/s
+ > Perf (num_groups= 8, m= 4096, n= 7168, k=34304): 3028 us |  665 TFLOPS |  876 GB/s
+ > Perf (num_groups= 8, m= 7168, n= 2048, k=30208): 1399 us |  634 TFLOPS | 1070 GB/s
+ > Perf (num_groups=16, m= 4096, n= 7168, k=33152): 3609 us |  539 TFLOPS | 1248 GB/s
+ > Perf (num_groups=16, m= 7168, n= 2048, k=34304): 1853 us |  544 TFLOPS | 1355 GB/s
+
+Testing cuBLASLt GEMM:
+ > Perf (m=     1, n=  2112, k=  7168, layout=NT, BF16, acc=0):    17 us |    2 TFLOPS | 1828 GB/s
+ > Perf (m=     1, n=  2112, k=  7168, layout=NT, BF16, acc=1):    17 us |    2 TFLOPS | 1827 GB/s
+ > Perf (m=     1, n=   576, k=  7168, layout=NT, BF16, acc=0):     7 us |    1 TFLOPS | 1166 GB/s
+ > Perf (m=     1, n=   576, k=  7168, layout=NT, BF16, acc=1):     7 us |    1 TFLOPS | 1177 GB/s
+ > Perf (m=     1, n= 24576, k=  1536, layout=NT, BF16, acc=0):    36 us |    2 TFLOPS | 2100 GB/s
+ > Perf (m=     1, n= 24576, k=  1536, layout=NT, BF16, acc=1):    36 us |    2 TFLOPS | 2106 GB/s
+ > Perf (m=     1, n= 32768, k=   512, layout=NT, BF16, acc=0):    19 us |    2 TFLOPS | 1816 GB/s
+ > Perf (m=     1, n= 32768, k=   512, layout=NT, BF16, acc=1):    19 us |    2 TFLOPS | 1821 GB/s
+ > Perf (m=     1, n=  7168, k= 16384, layout=NT, BF16, acc=0):    88 us |    3 TFLOPS | 2670 GB/s
+ > Perf (m=     1, n=  7168, k= 16384, layout=NT, BF16, acc=1):    88 us |    3 TFLOPS | 2663 GB/s
+ > Perf (m=     1, n=  4096, k=  7168, layout=NT, BF16, acc=0):    29 us |    2 TFLOPS | 2033 GB/s
+ > Perf (m=     1, n=  4096, k=  7168, layout=NT, BF16, acc=1):    29 us |    2 TFLOPS | 2022 GB/s
+ > Perf (m=     1, n=  7168, k=  2048, layout=NT, BF16, acc=0):    16 us |    2 TFLOPS | 1833 GB/s
+ > Perf (m=     1, n=  7168, k=  2048, layout=NT, BF16, acc=1):    16 us |    2 TFLOPS | 1837 GB/s
+ > Perf (m=     1, n=   256, k=  7168, layout=NT, FP32, acc=0):     6 us |    1 TFLOPS |  629 GB/s
+ > Perf (m=     1, n=129280, k=  7168, layout=NT, FP32, acc=0):   624 us |    3 TFLOPS | 2971 GB/s
+ > Perf (m=   128, n=  2112, k=  7168, layout=NT, BF16, acc=0):    18 us |  216 TFLOPS | 1822 GB/s
+ > Perf (m=   128, n=  2112, k=  7168, layout=NT, BF16, acc=1):    18 us |  215 TFLOPS | 1839 GB/s
+ > Perf (m=   128, n=   576, k=  7168, layout=NT, BF16, acc=0):     9 us |  112 TFLOPS | 1089 GB/s
+ > Perf (m=   128, n=   576, k=  7168, layout=NT, BF16, acc=1):     9 us |  113 TFLOPS | 1107 GB/s
+ > Perf (m=   128, n= 24576, k=  1536, layout=NT, BF16, acc=0):    38 us |  256 TFLOPS | 2179 GB/s
+ > Perf (m=   128, n= 24576, k=  1536, layout=NT, BF16, acc=1):    39 us |  250 TFLOPS | 2292 GB/s
+ > Perf (m=   128, n= 32768, k=   512, layout=NT, BF16, acc=0):    20 us |  211 TFLOPS | 2068 GB/s
+ > Perf (m=   128, n= 32768, k=   512, layout=NT, BF16, acc=1):    23 us |  189 TFLOPS | 2226 GB/s
+ > Perf (m=   128, n=  7168, k= 16384, layout=NT, BF16, acc=0):    91 us |  330 TFLOPS | 2647 GB/s
+ > Perf (m=   128, n=  7168, k= 16384, layout=NT, BF16, acc=1):    91 us |  329 TFLOPS | 2654 GB/s
+ > Perf (m=   128, n=  4096, k=  7168, layout=NT, BF16, acc=0):    31 us |  246 TFLOPS | 2012 GB/s
+ > Perf (m=   128, n=  4096, k=  7168, layout=NT, BF16, acc=1):    31 us |  244 TFLOPS | 2034 GB/s
+ > Perf (m=   128, n=  7168, k=  2048, layout=NT, BF16, acc=0):    17 us |  227 TFLOPS | 1913 GB/s
+ > Perf (m=   128, n=  7168, k=  2048, layout=NT, BF16, acc=1):    17 us |  223 TFLOPS | 1993 GB/s
+ > Perf (m=   128, n=   256, k=  7168, layout=NT, FP32, acc=0):     7 us |   72 TFLOPS |  861 GB/s
+ > Perf (m=   128, n=129280, k=  7168, layout=NT, FP32, acc=0):   657 us |  361 TFLOPS | 2923 GB/s
+ > Perf (m=  4096, n=  2112, k=  7168, layout=NT, BF16, acc=0):   154 us |  803 TFLOPS |  688 GB/s
+ > Perf (m=  4096, n=  2112, k=  7168, layout=NT, BF16, acc=1):   157 us |  789 TFLOPS |  786 GB/s
+ > Perf (m=  4096, n=   576, k=  7168, layout=NT, BF16, acc=0):    46 us |  728 TFLOPS | 1543 GB/s
+ > Perf (m=  4096, n=   576, k=  7168, layout=NT, BF16, acc=1):    47 us |  723 TFLOPS | 1634 GB/s
+ > Perf (m=  4096, n= 24576, k=  1536, layout=NT, BF16, acc=0):   402 us |  768 TFLOPS |  719 GB/s
+ > Perf (m=  4096, n= 24576, k=  1536, layout=NT, BF16, acc=1):   448 us |  691 TFLOPS | 1097 GB/s
+ > Perf (m=  4096, n= 32768, k=   512, layout=NT, BF16, acc=0):   215 us |  638 TFLOPS | 1422 GB/s
+ > Perf (m=  4096, n= 32768, k=   512, layout=NT, BF16, acc=1):   314 us |  437 TFLOPS | 1828 GB/s
+ > Perf (m=  4096, n=  7168, k= 16384, layout=NT, BF16, acc=0):  1163 us |  827 TFLOPS |  368 GB/s
+ > Perf (m=  4096, n=  7168, k= 16384, layout=NT, BF16, acc=1):  1170 us |  822 TFLOPS |  416 GB/s
+ > Perf (m=  4096, n=  4096, k=  7168, layout=NT, BF16, acc=0):   292 us |  824 TFLOPS |  517 GB/s
+ > Perf (m=  4096, n=  4096, k=  7168, layout=NT, BF16, acc=1):   295 us |  815 TFLOPS |  626 GB/s
+ > Perf (m=  4096, n=  7168, k=  2048, layout=NT, BF16, acc=0):   155 us |  775 TFLOPS |  675 GB/s
+ > Perf (m=  4096, n=  7168, k=  2048, layout=NT, BF16, acc=1):   168 us |  718 TFLOPS |  976 GB/s
+ > Perf (m=  4096, n=   256, k=  7168, layout=NT, FP32, acc=0):    36 us |  417 TFLOPS | 1845 GB/s
+ > Perf (m=  4096, n=129280, k=  7168, layout=NT, FP32, acc=0): 10406 us |  730 TFLOPS |  387 GB/s
+ > Perf (m=  4096, n=  7168, k=  2112, layout=NN, BF16, acc=0):   160 us |  775 TFLOPS |  664 GB/s
+ > Perf (m=  2112, n=  4096, k=  7168, layout=TN, FP32, acc=1):   174 us |  712 TFLOPS |  908 GB/s
+ > Perf (m=  2112, n=  4096, k=  7168, layout=TN, BF16, acc=0):   164 us |  758 TFLOPS |  650 GB/s
+ > Perf (m=  4096, n=  7168, k=   576, layout=NN, BF16, acc=0):    53 us |  641 TFLOPS | 1358 GB/s
+ > Perf (m=   576, n=  4096, k=  7168, layout=TN, FP32, acc=1):    52 us |  655 TFLOPS | 1662 GB/s
+ > Perf (m=   576, n=  4096, k=  7168, layout=TN, BF16, acc=0):    49 us |  692 TFLOPS | 1467 GB/s
+ > Perf (m=  4096, n=  1536, k= 24576, layout=NN, BF16, acc=0):   377 us |  821 TFLOPS |  768 GB/s
+ > Perf (m= 24576, n=  4096, k=  1536, layout=TN, FP32, acc=1):   585 us |  528 TFLOPS | 1526 GB/s
+ > Perf (m= 24576, n=  4096, k=  1536, layout=TN, BF16, acc=0):   398 us |  777 TFLOPS |  728 GB/s
+ > Perf (m=  4096, n=   512, k= 32768, layout=NN, BF16, acc=0):   179 us |  769 TFLOPS | 1714 GB/s
+ > Perf (m= 32768, n=  4096, k=   512, layout=TN, FP32, acc=1):   527 us |  261 TFLOPS | 2109 GB/s
+ > Perf (m= 32768, n=  4096, k=   512, layout=TN, BF16, acc=0):   210 us |  655 TFLOPS | 1460 GB/s
+ > Perf (m=  4096, n= 16384, k=  7168, layout=NN, BF16, acc=0):  1209 us |  796 TFLOPS |  354 GB/s
+ > Perf (m=  7168, n=  4096, k= 16384, layout=TN, FP32, acc=1):  1186 us |  811 TFLOPS |  509 GB/s
+ > Perf (m=  7168, n=  4096, k= 16384, layout=TN, BF16, acc=0):  1159 us |  830 TFLOPS |  369 GB/s
+ > Perf (m=  4096, n=  7168, k=  4096, layout=NN, BF16, acc=0):   298 us |  808 TFLOPS |  507 GB/s
+ > Perf (m=  4096, n=  4096, k=  7168, layout=TN, FP32, acc=1):   308 us |  781 TFLOPS |  818 GB/s
+ > Perf (m=  4096, n=  4096, k=  7168, layout=TN, BF16, acc=0):   291 us |  827 TFLOPS |  519 GB/s
+ > Perf (m=  4096, n=  2048, k=  7168, layout=NN, BF16, acc=0):   147 us |  816 TFLOPS |  711 GB/s
+ > Perf (m=  7168, n=  4096, k=  2048, layout=TN, FP32, acc=1):   207 us |  581 TFLOPS | 1359 GB/s
+ > Perf (m=  7168, n=  4096, k=  2048, layout=TN, BF16, acc=0):   154 us |  779 TFLOPS |  679 GB/s
+ > Perf (m=  4096, n=  7168, k=   256, layout=NN, BF16, acc=0):    31 us |  482 TFLOPS | 2068 GB/s
+ > Perf (m=   256, n=  4096, k=  7168, layout=TN, FP32, acc=1):    36 us |  415 TFLOPS | 1954 GB/s
+ > Perf (m=   256, n=  4096, k=  7168, layout=TN, BF16, acc=0):    36 us |  422 TFLOPS | 1811 GB/s
+ > Perf (m=  4096, n=  7168, k=129280, layout=NN, BF16, acc=0):  9751 us |  779 TFLOPS |  305 GB/s
+ > Perf (m=129280, n=  4096, k=  7168, layout=TN, FP32, acc=1): 10512 us |  722 TFLOPS |  585 GB/s
+ > Perf (m=129280, n=  4096, k=  7168, layout=TN, BF16, acc=0): 10062 us |  754 TFLOPS |  295 GB/s
+
+--- tests/test_fp8_fp4.py ---
+Library path:
+ > ['/usr/local/lib/python3.12/dist-packages/deep_gemm']
+
+Testing GEMM:
+ > Perf (m=     1, n=  2112, k=  7168, 1D2D, layout=NT, BF16, acc=0):   14.0 us |    2 TFLOPS | 1080 GB/s | 0.83x cuBLAS
+ > Perf (m=     1, n=   576, k=  7168, 1D2D, layout=NT, BF16, acc=0):   10.2 us |    1 TFLOPS |  404 GB/s | 0.76x cuBLAS
+ > Perf (m=     1, n= 24576, k=  1536, 1D2D, layout=NT, BF16, acc=0):   21.6 us |    3 TFLOPS | 1748 GB/s | 0.93x cuBLAS
+ > Perf (m=     1, n= 32768, k=   512, 1D2D, layout=NT, BF16, acc=0):   10.7 us |    3 TFLOPS | 1573 GB/s | 1.00x cuBLAS
+ > Perf (m=     1, n=  7168, k= 16384, 1D2D, layout=NT, BF16, acc=0):   51.7 us |    5 TFLOPS | 2273 GB/s | 1.02x cuBLAS
+ > Perf (m=     1, n=  4096, k=  7168, 1D2D, layout=NT, BF16, acc=0):   18.4 us |    3 TFLOPS | 1595 GB/s | 0.88x cuBLAS
+ > Perf (m=     1, n=  7168, k=  2048, 1D2D, layout=NT, BF16, acc=0):    9.8 us |    3 TFLOPS | 1501 GB/s | 0.95x cuBLAS
+ > Perf (m=   128, n=  2112, k=  7168, 1D2D, layout=NT, BF16, acc=0):   11.3 us |  343 TFLOPS | 1472 GB/s | 1.02x cuBLAS
+ > Perf (m=   128, n=   576, k=  7168, 1D2D, layout=NT, BF16, acc=0):    9.5 us |  112 TFLOPS |  552 GB/s | 0.93x cuBLAS
+ > Perf (m=   128, n= 24576, k=  1536, 1D2D, layout=NT, BF16, acc=0):   21.8 us |  443 TFLOPS | 2029 GB/s | 0.97x cuBLAS
+ > Perf (m=   128, n= 32768, k=   512, 1D2D, layout=NT, BF16, acc=0):   12.7 us |  338 TFLOPS | 1985 GB/s | 1.00x cuBLAS
+ > Perf (m=   128, n=  7168, k= 16384, 1D2D, layout=NT, BF16, acc=0):   53.3 us |  564 TFLOPS | 2278 GB/s | 0.97x cuBLAS
+ > Perf (m=   128, n=  4096, k=  7168, 1D2D, layout=NT, BF16, acc=0):   17.3 us |  435 TFLOPS | 1817 GB/s | 1.00x cuBLAS
+ > Perf (m=   128, n=  7168, k=  2048, 1D2D, layout=NT, BF16, acc=0):   10.8 us |  349 TFLOPS | 1561 GB/s | 0.95x cuBLAS
+ > Perf (m=  4096, n=  2112, k=  7168, 1D2D, layout=NT, BF16, acc=0):   94.8 us | 1308 TFLOPS |  661 GB/s | 1.02x cuBLAS
+ > Perf (m=  4096, n=   576, k=  7168, 1D2D, layout=NT, BF16, acc=0):   33.3 us | 1015 TFLOPS | 1174 GB/s | 0.83x cuBLAS
+ > Perf (m=  4096, n= 24576, k=  1536, 1D2D, layout=NT, BF16, acc=0):  236.4 us | 1308 TFLOPS | 1039 GB/s | 1.00x cuBLAS
+ > Perf (m=  4096, n= 32768, k=   512, 1D2D, layout=NT, BF16, acc=0):  134.4 us | 1023 TFLOPS | 2138 GB/s | 1.11x cuBLAS
+ > Perf (m=  4096, n=  7168, k= 16384, 1D2D, layout=NT, BF16, acc=0):  639.8 us | 1504 TFLOPS |  384 GB/s | 1.03x cuBLAS
+ > Perf (m=  4096, n=  4096, k=  7168, 1D2D, layout=NT, BF16, acc=0):  165.2 us | 1456 TFLOPS |  564 GB/s | 1.02x cuBLAS
+ > Perf (m=  4096, n=  7168, k=  2048, 1D2D, layout=NT, BF16, acc=0):   91.8 us | 1311 TFLOPS |  894 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=  7168, k=  2112, 1D2D, layout=NT, BF16, acc=0):   98.3 us | 1262 TFLOPS |  842 GB/s | 1.05x cuBLAS
+ > Perf (m=  2112, n=  4096, k=  7168, 1D1D, layout=NT, FP32, acc=1):  137.4 us |  903 TFLOPS |  838 GB/s | 0.89x cuBLAS
+ > Perf (m=  2112, n=  4096, k=  7168, 1D1D, layout=NT, BF16, acc=0):   93.6 us | 1325 TFLOPS |  666 GB/s | 1.17x cuBLAS
+ > Perf (m=  4096, n=  7168, k=   576, 1D2D, layout=NT, BF16, acc=0):   38.7 us |  874 TFLOPS | 1688 GB/s | 1.00x cuBLAS
+ > Perf (m=   576, n=  4096, k=  7168, 1D1D, layout=NT, FP32, acc=1):   57.5 us |  588 TFLOPS |  929 GB/s | 0.60x cuBLAS
+ > Perf (m=   576, n=  4096, k=  7168, 1D1D, layout=NT, BF16, acc=0):   30.2 us | 1121 TFLOPS | 1271 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=  1536, k= 24576, 1D2D, layout=NT, BF16, acc=0):  203.1 us | 1523 TFLOPS |  759 GB/s | 1.07x cuBLAS
+ > Perf (m= 24576, n=  4096, k=  1536, 1D1D, layout=NT, FP32, acc=1):  469.7 us |  658 TFLOPS | 1811 GB/s | 0.87x cuBLAS
+ > Perf (m= 24576, n=  4096, k=  1536, 1D1D, layout=NT, BF16, acc=0):  234.2 us | 1321 TFLOPS | 1053 GB/s | 1.00x cuBLAS
+ > Perf (m=  4096, n=   512, k= 32768, 1D2D, layout=NT, BF16, acc=0):  105.3 us | 1306 TFLOPS | 1514 GB/s | 0.90x cuBLAS
+ > Perf (m= 32768, n=  4096, k=   512, 1D1D, layout=NT, FP32, acc=1):  554.1 us |  248 TFLOPS | 1973 GB/s | 0.94x cuBLAS
+ > Perf (m= 32768, n=  4096, k=   512, 1D1D, layout=NT, BF16, acc=0):  140.2 us |  981 TFLOPS | 2054 GB/s | 1.00x cuBLAS
+ > Perf (m=  4096, n= 16384, k=  7168, 1D2D, layout=NT, BF16, acc=0):  652.8 us | 1474 TFLOPS |  432 GB/s | 0.99x cuBLAS
+ > Perf (m=  7168, n=  4096, k= 16384, 1D1D, layout=NT, FP32, acc=1):  910.4 us | 1057 TFLOPS |  467 GB/s | 0.72x cuBLAS
+ > Perf (m=  7168, n=  4096, k= 16384, 1D1D, layout=NT, BF16, acc=0):  639.6 us | 1504 TFLOPS |  386 GB/s | 0.99x cuBLAS
+ > Perf (m=  4096, n=  7168, k=  4096, 1D2D, layout=NT, BF16, acc=0):  169.4 us | 1420 TFLOPS |  622 GB/s | 1.00x cuBLAS
+ > Perf (m=  4096, n=  4096, k=  7168, 1D1D, layout=NT, FP32, acc=1):  250.3 us |  961 TFLOPS |  778 GB/s | 0.76x cuBLAS
+ > Perf (m=  4096, n=  4096, k=  7168, 1D1D, layout=NT, BF16, acc=0):  165.1 us | 1457 TFLOPS |  565 GB/s | 1.02x cuBLAS
+ > Perf (m=  4096, n=  2048, k=  7168, 1D2D, layout=NT, BF16, acc=0):   84.1 us | 1429 TFLOPS |  734 GB/s | 1.03x cuBLAS
+ > Perf (m=  7168, n=  4096, k=  2048, 1D1D, layout=NT, FP32, acc=1):  169.5 us |  710 TFLOPS | 1526 GB/s | 0.84x cuBLAS
+ > Perf (m=  7168, n=  4096, k=  2048, 1D1D, layout=NT, BF16, acc=0):   90.8 us | 1324 TFLOPS |  906 GB/s | 0.98x cuBLAS
+Average FP8xFP8 GEMM speedup over cuBLASLt: 0.945x
+
+Testing m-grouped contiguous GEMM:
+ > Perf (num_groups=4, m=35456, n=  6144, k= 7168, 1D2D, layout=NT, psum=True): 2125 us | 1470 TFLOPS |  411 GB/s
+ > Perf (num_groups=4, m=36096, n=  7168, k= 3072, 1D2D, layout=NT, psum=True): 1129 us | 1408 TFLOPS |  638 GB/s
+ > Perf (num_groups=4, m=31104, n=  4096, k= 4096, 1D2D, layout=NT, psum=True):  737 us | 1416 TFLOPS |  615 GB/s
+ > Perf (num_groups=4, m=32896, n=  4096, k= 2048, 1D2D, layout=NT, psum=True):  405 us | 1364 TFLOPS |  921 GB/s
+ > Perf (num_groups=8, m=31232, n=  6144, k= 7168, 1D2D, layout=NT, psum=True): 1885 us | 1459 TFLOPS |  513 GB/s
+ > Perf (num_groups=8, m=38272, n=  7168, k= 3072, 1D2D, layout=NT, psum=True): 1198 us | 1407 TFLOPS |  706 GB/s
+ > Perf (num_groups=8, m=33280, n=  4096, k= 4096, 1D2D, layout=NT, psum=True):  794 us | 1407 TFLOPS |  690 GB/s
+ > Perf (num_groups=8, m=30976, n=  4096, k= 2048, 1D2D, layout=NT, psum=True):  386 us | 1345 TFLOPS | 1000 GB/s
+ > Perf (num_groups=4, m=35456, n=  6144, k= 7168, 1D2D, layout=NT, psum=False): 2123 us | 1471 TFLOPS |  412 GB/s
+ > Perf (num_groups=4, m=36096, n=  7168, k= 3072, 1D2D, layout=NT, psum=False): 1130 us | 1407 TFLOPS |  637 GB/s
+ > Perf (num_groups=4, m=31104, n=  4096, k= 4096, 1D2D, layout=NT, psum=False):  740 us | 1411 TFLOPS |  613 GB/s
+ > Perf (num_groups=4, m=32896, n=  4096, k= 2048, 1D2D, layout=NT, psum=False):  407 us | 1355 TFLOPS |  914 GB/s
+ > Perf (num_groups=8, m=31232, n=  6144, k= 7168, 1D2D, layout=NT, psum=False): 1897 us | 1450 TFLOPS |  510 GB/s
+ > Perf (num_groups=8, m=38272, n=  7168, k= 3072, 1D2D, layout=NT, psum=False): 1210 us | 1393 TFLOPS |  699 GB/s
+ > Perf (num_groups=8, m=33280, n=  4096, k= 4096, 1D2D, layout=NT, psum=False):  799 us | 1398 TFLOPS |  685 GB/s
+ > Perf (num_groups=8, m=30976, n=  4096, k= 2048, 1D2D, layout=NT, psum=False):  394 us | 1321 TFLOPS |  982 GB/s
+
+Testing m-grouped masked GEMM:
+ > Perf (num_groups=32, expected_m_per_group= 192, n=6144, k=7168, 1D2D, psum=1):  587 us (max: 591 us) |  930 TFLOPS | 2608 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=7168, k=3072, 1D2D, psum=1):  323 us (max: 325 us) |  838 TFLOPS | 2517 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=4096, k=4096, 1D2D, psum=1):  243 us (max: 244 us) |  831 TFLOPS | 2519 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=4096, k=2048, 1D2D, psum=1):  135 us (max: 136 us) |  761 TFLOPS | 2457 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=6144, k=7168, 1D2D, psum=1):  430 us (max: 470 us) | 1351 TFLOPS |  917 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=7168, k=3072, 1D2D, psum=1):  204 us (max: 226 us) | 1269 TFLOPS | 1151 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=4096, k=4096, 1D2D, psum=1):  165 us (max: 182 us) | 1254 TFLOPS | 1073 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=4096, k=2048, 1D2D, psum=1):   85 us (max:  99 us) | 1169 TFLOPS | 1310 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=6144, k=7168, 1D2D, psum=1):  499 us (max: 500 us) |  111 TFLOPS | 2848 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=7168, k=3072, 1D2D, psum=1):  272 us (max: 272 us) |  101 TFLOPS | 2633 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=4096, k=4096, 1D2D, psum=1):  210 us (max: 211 us) |  100 TFLOPS | 2589 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=4096, k=2048, 1D2D, psum=1):  114 us (max: 115 us) |   92 TFLOPS | 2407 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=6144, k=7168, 1D2D, psum=1):  106 us (max: 106 us) |  101 TFLOPS | 2516 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=7168, k=3072, 1D2D, psum=1):   60 us (max:  60 us) |   84 TFLOPS | 2244 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=4096, k=4096, 1D2D, psum=1):   47 us (max:  47 us) |   82 TFLOPS | 2168 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=4096, k=2048, 1D2D, psum=1):   28 us (max:  28 us) |   70 TFLOPS | 1855 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=6144, k=7168, 1D2D, psum=0):  590 us (max: 592 us) |  925 TFLOPS | 2596 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=7168, k=3072, 1D2D, psum=0):  324 us (max: 325 us) |  836 TFLOPS | 2509 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=4096, k=4096, 1D2D, psum=0):  244 us (max: 245 us) |  828 TFLOPS | 2509 GB/s
+ > Perf (num_groups=32, expected_m_per_group= 192, n=4096, k=2048, 1D2D, psum=0):  135 us (max: 136 us) |  759 TFLOPS | 2450 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=6144, k=7168, 1D2D, psum=0):  430 us (max: 470 us) | 1351 TFLOPS |  916 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=7168, k=3072, 1D2D, psum=0):  204 us (max: 226 us) | 1269 TFLOPS | 1152 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=4096, k=4096, 1D2D, psum=0):  166 us (max: 183 us) | 1248 TFLOPS | 1068 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=1024, n=4096, k=2048, 1D2D, psum=0):   85 us (max:  99 us) | 1165 TFLOPS | 1305 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=6144, k=7168, 1D2D, psum=0):  484 us (max: 485 us) |  114 TFLOPS | 2936 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=7168, k=3072, 1D2D, psum=0):  262 us (max: 262 us) |  105 TFLOPS | 2735 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=4096, k=4096, 1D2D, psum=0):  197 us (max: 197 us) |  107 TFLOPS | 2767 GB/s
+ > Perf (num_groups=32, expected_m_per_group=  20, n=4096, k=2048, 1D2D, psum=0):  106 us (max: 106 us) |  100 TFLOPS | 2604 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=6144, k=7168, 1D2D, psum=0):  101 us (max: 102 us) |  106 TFLOPS | 2631 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=7168, k=3072, 1D2D, psum=0):   58 us (max:  58 us) |   87 TFLOPS | 2329 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=4096, k=4096, 1D2D, psum=0):   48 us (max:  49 us) |   80 TFLOPS | 2115 GB/s
+ > Perf (num_groups= 6, expected_m_per_group=  20, n=4096, k=2048, 1D2D, psum=0):   28 us (max:  28 us) |   70 TFLOPS | 1863 GB/s
+
+Testing k-grouped contiguous GEMM:
+ > Perf (num_groups= 4, m= 4096, n= 7168, k=28416, gran_k=128): 1641 us | 1017 TFLOPS |  774 GB/s
+ > Perf (num_groups= 4, m= 7168, n= 2048, k=31744, gran_k=128):  937 us |  995 TFLOPS |  823 GB/s
+ > Perf (num_groups= 8, m= 4096, n= 7168, k=34304, gran_k=128): 2071 us |  973 TFLOPS | 1100 GB/s
+ > Perf (num_groups= 8, m= 7168, n= 2048, k=30208, gran_k=128):  947 us |  937 TFLOPS | 1296 GB/s
+ > Perf (num_groups=16, m= 4096, n= 7168, k=33152, gran_k=128): 2347 us |  829 TFLOPS | 1765 GB/s
+ > Perf (num_groups=16, m= 7168, n= 2048, k=34304, gran_k=128): 1177 us |  856 TFLOPS | 1873 GB/s
+

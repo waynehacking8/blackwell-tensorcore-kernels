@@ -211,3 +211,26 @@ Max-Q power limit explains the shortfall). The *relative* collapse (45% → 8%) 
 moving: each GPU generation hides its Tensor Core peak behind a new instruction (Ampere
 `mma.sync`+`cp.async` → Hopper `wgmma`+TMA → Blackwell `tcgen05`), and code written against
 the previous abstraction keeps its absolute speed while silently losing its relative one.
+
+## Phase 2.5 addendum: the CUTLASS 3.x wgmma kernel joins the comparison
+
+`ncu --set full` on `cutlass_sm90` (our CUTLASS 3.x CollectiveBuilder kernel,
+`src/cutlass_sm90.cu`) at 8192³, same methodology (full report:
+`results/ncu_cutlass_8192.txt` / `.ncu-rep`):
+
+| metric (ncu, 8192³) | `gemm_wmma_t` (ours) | **`cutlass_sm90` (ours)** | `nvjet_sm90` (cuBLAS-TC) |
+|---|---|---|---|
+| TFLOP/s (bench) | 61.0 | **640.9** | 749.9 |
+| SM compute throughput | 26.7% | **74.4%** | 91.9% |
+| Memory throughput | 90.5% (L1/shared) | 51.3% | — |
+| DRAM throughput | 6.2% | 41.2% | 28.9% |
+| Achieved occupancy | 49.4% | **14.1%** | 14.8% |
+| Registers / thread | 64 | **168** | 168 |
+| Top stall reason | MIO queue full | **CTA barrier (warpgroup sync), 58.3%** | WARPGROUP.ARRIVES |
+
+The CUTLASS kernel lands in nvjet's profile *class*, not the WMMA kernel's: low occupancy +
+maximum register allocation (168 = the warpgroup register budget) + stalls on warpgroup
+synchronization rather than operand feeding. That is the ncu-verifiable definition of "the
+kernel issues `wgmma`". The residual 17-point SM-throughput gap to nvjet (74% vs 92%) is
+tile-shape and rasterization tuning — nvjet dispatches a 320×128 tile with a different cluster
+configuration; ours is a fixed 128×256×64 with a 2×1×1 cluster.

@@ -21,9 +21,9 @@ Hopper and Blackwell silicon.
 
 > **Measurement status:** both generations are now populated in `results/bench.csv` —
 > **Blackwell RTX PRO 6000 Max-Q (sm_120)** and **H100 80GB SXM5 (sm_90)** (run on a separate
-> 8×H100 box, pinned to a single idle GPU). Two headline findings:
+> 8×H100 box, pinned to a single idle GPU). Three headline findings:
 >
-> 1. **(Phase 2, new)** A hand-written **raw `mma.sync` kernel reaches 106% of cuBLAS-TC on
+> 1. **(Phase 2, sm_120)** A hand-written **raw `mma.sync` kernel reaches 106% of cuBLAS-TC on
 >    sm_120** (243 vs 229 TFLOP/s @ 8192³) — beating the `cutlass_80` kernel cuBLAS dispatches
 >    on this card, with the same standard-optimization stack Boehm used to reach ~94% on CUDA
 >    cores. The WMMA wrapper, not the recipe, was what kept the Phase 1 kernel at 45%.
@@ -31,6 +31,12 @@ Hopper and Blackwell silicon.
 >    cuBLAS-TC on sm_120 reaches only 8% on H100** — not because the kernel runs slower per-SM,
 >    but because Hopper's Tensor Core ceiling is only reachable through `wgmma` warpgroup
 >    instructions that the WMMA API cannot emit.
+> 3. **(Phase 2.5, sm_90)** That conclusion is now **closed constructively**: the same GEMM
+>    rebuilt with CUTLASS 3.x (TMA + `wgmma`) reaches **85.5% of cuBLAS-TC on H100** — a 10.5×
+>    recovery from the instruction class alone. Findings 1+3 are the same lesson on two
+>    architectures: reach the *current* generation's native instruction or lose the ceiling.
+>    Third-party ceilings (DeepGEMM, ThunderKittens, Stream-K) are also measured on this box
+>    as reference rows.
 
 ## What this is NOT
 - Not a cuBLAS replacement — cuBLAS is the ceiling measured against, honestly.
@@ -46,13 +52,16 @@ src/gemm_naive.cu      # one-thread-per-output baseline (correctness anchor)
 src/gemm_tiled.cu      # shared-memory tiled + register-blocked SIMT GEMM
 src/gemm_wmma.cu       # WMMA 16x16x16 Tensor Core GEMM (FP16 in, FP32 acc)
 src/gemm_mma.cu        # hand-written raw mma.sync m16n8k16 GEMM — 5-step ablation ladder (Phase 2)
+src/cutlass_sm90.cu    # CUTLASS 3.x TMA + wgmma GEMM, Hopper only (Phase 2.5)
 include/mma_ptx.cuh    # the PTX building blocks: mma.sync, ldmatrix, XOR swizzle, cp.async
 src/reference.cu       # cuBLAS FP32 ceiling (cublasSgemm, CUDA cores)
 src/cublas_tc.cu       # cuBLAS Tensor Core ceiling (cublasGemmEx, FP16 in / FP32 acc) — same precision as wmma/mma
 src/main.cu            # correctness + benchmark driver -> results/bench.csv
 include/util.cuh       # timing, init, max-abs-error check
 scripts/sweep_mma_stages.sh  # cp.async pipeline-depth sweep -> results/mma_stage_sweep.csv
-CMakeLists.txt         # builds for sm_90 and sm_120
+scripts/run_reference_benches.sh  # DeepGEMM / ThunderKittens / FA3 reference runs (Phase 4)
+analysis/reference_summary.py     # parse reference logs -> summary.md + reference_benches.png
+CMakeLists.txt         # builds for sm_90 and sm_120 (+ sm_90a CUTLASS via -DCUTLASS_DIR)
 docs/design-decisions.md
 docs/roadmap.md
 ```
@@ -276,6 +285,72 @@ kernel slow on the new GPUs?"
 > multistage `cp.async` pipelining — the kernel-name string itself (`cutlass_80_*`) is the
 > evidence. This is consistent with Boehm's published GEMM ablation, where 2D blocktiling +
 > vectorized loads + warptiling reaches ~94% of cuBLAS *without* TMA or warp specialization.
+
+### Phase 2.5 — breaking the WMMA ceiling with CUTLASS 3.x `wgmma` (constructive proof)
+
+The H100 result above says the WMMA API *cannot* follow Hopper's ceiling. That conclusion
+rested on literature + ncu evidence; this closes it constructively. `src/cutlass_sm90.cu`
+builds the same FP16-in/FP32-accumulate GEMM with CUTLASS 3.x's `CollectiveBuilder`
+(TMA loads + `wgmma` warpgroup MMA, warp-specialized cooperative schedule), added as kernel
+row `cutlass_sm90` (build: `cmake -DCMAKE_CUDA_ARCHITECTURES=90a -DCUTLASS_DIR=…`; raw rows
+in `results/bench_sm90a.csv`, same one-idle-H100 methodology):
+
+| size | wmma | **cutlass_sm90** | cublas_tc (nvjet) | cutlass % of cuBLAS-TC | wmma % |
+|---|---|---|---|---|---|
+| 2048 | 56.0 | **373.9** | 540.9 | 69.1% | 10.4% |
+| 4096 | 58.9 | **552.7** | 726.4 | 76.1% | 8.1% |
+| 8192 | 61.0 | **640.9** | 749.9 | **85.5%** | 8.1% |
+
+Switching instruction class (`mma.sync` → `wgmma`) recovers **10.5×** at 8192³ — from 8% to
+85.5% of the cuBLAS-TC ceiling — with identical numerical error (0.0112 max abs, FP16 input
+rounding). The `ncu --set full` signature confirms the kernel actually crossed regimes
+(`results/ncu_cutlass_8192.txt`):
+
+| metric (ncu, 8192³) | wmma (ours) | **cutlass_sm90 (ours)** | nvjet (cuBLAS-TC) |
+|---|---|---|---|
+| SM compute throughput | 26.7% | **74.4%** | 91.9% |
+| Achieved occupancy | 49.4% | **14.1%** | 14.8% |
+| Registers / thread | 64 | **168** | 168 |
+| Top stall reason | MIO queue full (memory feed) | **CTA barrier (warpgroup sync)** | WARPGROUP.ARRIVES |
+
+The CUTLASS kernel inherits nvjet's *shape*: low occupancy, 168 registers/thread, stalls on
+warpgroup synchronization instead of operand feeding. The remaining 14.5% to nvjet is
+tile-shape/cluster/rasterization autotuning (nvjet picks 320×128 tiles vs our fixed 128×256) —
+a tuning gap, not an instruction-class gap. Also note the reversal this documents: warp
+specialization, a measured *negative* on sm_120 (`experiments/wmma_ws_probe.cu`), is
+*mandatory* on Hopper.
+
+### Third-party reference baselines on this box (Phase 4)
+
+What do the leading open-source kernels actually achieve on *this* H100, run with their own
+benchmarks, unmodified? (`scripts/run_reference_benches.sh`; raw logs + clock state in
+`results/reference/`; parsed by `analysis/reference_summary.py`)
+
+![Reference baselines](results/reference_benches.png)
+
+| kernel | measured TFLOPS | % of H100 peak | published | measured / published |
+|---|---|---|---|---|
+| DeepGEMM FP8 (DeepSeek) | **1523** | 77% | 1358 (H800) | **112%** |
+| DeepGEMM BF16 | 830 | 84% | — | — |
+| ThunderKittens FP8 | **1465** | 74% | ~1500 | **98%** |
+| ThunderKittens BF16 | 775 | 78% | ~760 | 102% |
+| ThunderKittens FP8 (per-block scaled) | 985 | 50% | — | — |
+| FlashAttention-3 FP16 fwd | see `results/reference/fa3.txt` | | 740 | |
+| *cuBLAS FP16-TC (nvjet), context* | *750* | *76%* | — | — |
+| *this repo's WMMA kernel, context* | *61* | *6%* | — | — |
+| *this repo's CUTLASS wgmma kernel, context* | *641* | *65%* | — | — |
+
+Two readings: (1) the published numbers are *honest* — every project reproduces within ~±10%
+on our shared box at stock clocks, so the repo's own gaps are real, not environmental;
+(2) the FP8 ceiling (~1500 TFLOPS measured) is the target Phase 3's own FP8 kernel work
+gets measured against.
+
+One published claim that does **not** reproduce: **Stream-K's "up to 6.7×"**
+(arXiv:2301.03598). CUTLASS example 47 on this H100 lands at **0.94×–1.05×** vs data-parallel
+tiling, even on shapes built to have a 48%-idle final wave (`results/reference/streamk.txt`).
+The 6.7× was measured on A100 (108 SMs) against constructed worst cases; H100's 132 SMs shrink
+the relative tail, and the Stream-K reduction overhead eats what remains. Negative
+reproductions are reported as such — that is what the reference rows are for.
 
 ## References
 - [NVIDIA CUTLASS](https://github.com/NVIDIA/cutlass) — the production reference for Tensor Core GEMM.

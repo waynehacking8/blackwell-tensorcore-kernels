@@ -1,0 +1,48 @@
+-- CMake Version: 3.31.6
+-- CUTLASS 4.2.1
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- The CUDA compiler identification is NVIDIA 13.1.115 with host compiler GNU 13.3.0
+-- Detecting CUDA compiler ABI info
+-- Detecting CUDA compiler ABI info - done
+-- Check for working CUDA compiler: /usr/local/cuda/bin/nvcc - skipped
+-- Detecting CUDA compile features
+-- Detecting CUDA compile features - done
+-- Found CUDAToolkit: /usr/local/cuda/targets/x86_64-linux/include (found version "13.1.115")
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+-- CUDART: /usr/local/cuda/lib64/libcudart.so
+-- CUDA Driver: /usr/local/cuda/lib64/stubs/libcuda.so
+-- NVRTC: /usr/local/cuda/lib64/libnvrtc.so
+-- Default Install Location: install
+-- Found Python3: /usr/bin/python3.12 (found suitable version "3.12.3", minimum required is "3.5") found components: Interpreter
+-- CUDA Compilation Architectures: 90a
+-- Enable caching of reference results in conv unit tests
+-- Enable rigorous conv problem sizes in conv unit tests
+-- Grid Dependency Control (GDC) is enabled for SM100 kernels (required for programmatic dependent launches).
+-- Using the following NVCC flags: 
+  --expt-relaxed-constexpr
+  -ftemplate-backtrace-limit=0
+  -DCUTLASS_TEST_LEVEL=0
+  -DCUTLASS_TEST_ENABLE_CACHED_RESULTS=1
+  -DCUTLASS_CONV_UNIT_TEST_RIGOROUS_SIZE_ENABLED=1
+  -DCUTLASS_DEBUG_TRACE_LEVEL=0
+  -Xcompiler=-Wconversion
+  -Xcompiler=-fno-strict-aliasing
+-- Configuring cublas ...
+-- cuBLAS Disabled.
+-- Configuring cuBLAS ... done.
+-- Generating /cutlass/build/tools/library/cutlass_library_objs.unity.0d5bb3ba97a2.cu
+-- Generating /cutlass/build/tools/library/cutlass_library_objs.unity.2517cc6c388e.cu
+-- Generating /cutlass/build/tools/library/cutlass_library_objs.unity.2ddb221102ee.cu
+-- Completed generation of library instances. See /cutlass/build/tools/library/library_instance_generation.log for more information.
+-- Generating /cutlass/build/tools/profiler/cutlass_profiler.unity.1f651d759988.cu
+-- Generating /cutlass/build/tools/profiler/cutlass_profiler.unity.11cb496d74c1.cu
+-- Configuring done (4.4s)
+-- Generating done (0.4s)
+-- Build files have been written to: /cutlass/build

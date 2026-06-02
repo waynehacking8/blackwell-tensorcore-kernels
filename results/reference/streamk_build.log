@@ -1,0 +1,3 @@
+Building CUDA object examples/47_ampere_gemm_universal_streamk/CMakeFiles/47_ampere_gemm_universal_streamk.dir/ampere_gemm_universal_streamk.cu.o
+Linking CUDA executable 47_ampere_gemm_universal_streamk
+Built target 47_ampere_gemm_universal_streamk

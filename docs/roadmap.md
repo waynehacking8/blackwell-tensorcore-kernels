@@ -64,7 +64,16 @@
     see `results/mma_ablation.md` for the full analysis, validation checks, and raw data pointers.
 
 ## Phase 2.5 — Hopper wgmma (new: follows from the Phase 1 H100 result)
-- [ ] **CUTLASS 3.x / wgmma GEMM on H100 — break the WMMA ceiling with a constructive proof.**
+- [x] **CUTLASS 3.x / wgmma GEMM on H100 — break the WMMA ceiling with a constructive proof.**
+  **DONE — `src/cutlass_sm90.cu` / README Phase 2.5 section / `results/bench_sm90a.csv` /
+  `results/ncu_cutlass_8192.txt`.** Result: **640.9 TFLOP/s at 8192³ = 85.5% of cuBLAS-TC
+  (nvjet 749.9)** vs WMMA's 8.1% — a 10.5× recovery from the instruction class alone, with
+  identical numerical error. ncu signature matches nvjet's class exactly: 168 reg/thread,
+  14.1% occupancy, top stall = warpgroup CTA barrier (not WMMA's MIO-feed-bound profile) —
+  the kernel verifiably crossed into the wgmma regime. Landed in the 70–90% read-out band:
+  the remaining 14.5% is nvjet's tile-shape/cluster autotuning (320×128 vs our fixed
+  128×256), a tuning gap, not an instruction-class gap. The warp-specialization reversal is
+  documented: required on Hopper, measured-negative on sm_120.
   - **Question:** the H100 run established that WMMA cannot exceed ~65% of peak on Hopper
     (cannot emit `wgmma`); that conclusion currently rests on literature + ncu evidence.
     Does a from-scratch CUTLASS 3.x kernel (CuTe, warpgroup MMA + TMA) actually recover the
@@ -98,6 +107,13 @@ repo's own kernels, so every external claim becomes a measured row in `results/b
 
 - [ ] **Tawa warp-specialization compiler vs cuBLAS vs this repo's kernels (arXiv:2510.14719, CGO'26).**
   Published target: 79% SM utilization, 1.1× over cuBLAS on H100.
+  **Scoping note (2026-06-02):** Tawa is not a standalone tool — the implementation lives in a
+  Triton development branch (`triton-lang/triton@aref_auto_ws`); reproducing it requires
+  building that Triton fork from source (LLVM build, hours). Deferred. The architectural
+  question it poses — does compiler-generated warp specialization reach hand-tuned
+  performance — is answered constructively on this box by Phase 2.5: CUTLASS's
+  warp-specialized cooperative schedule reaches 85.5% of nvjet with the same ncu stall
+  signature.
   - **Question:** can a warp-specialization compiler actually beat cuBLAS on this H100 box, and
     where does it land relative to (a) our WMMA kernel (8.0% of nvjet) and (b) nvjet itself?
   - **Method:** build Tawa on the H100 box; compile GEMM for the repo's benchmark shapes
@@ -107,8 +123,18 @@ repo's own kernels, so every external claim becomes a measured row in `results/b
     cuBLAS, the "compilers can match hand-tuned libraries" claim is reproduced on our hardware;
     its ncu profile shows which async-overlap mechanisms our hand-written kernel lacks.
 
-- [ ] **Stream-K work decomposition (arXiv:2301.03598) — fix the wave-quantization tail.**
+- [x] **Stream-K work decomposition (arXiv:2301.03598) — fix the wave-quantization tail.**
   Published target: up to 6.7× over data-parallel tiling on quantization-unfriendly shapes.
+  **DONE (published number does NOT reproduce) — `results/reference/streamk.txt`.** CUTLASS
+  example 47 (sm_80 kernel) on one idle H100: Stream-K vs basic data-parallel lands at
+  **0.94×–1.05×** across the default sweep AND three deliberately wave-quantization-unfriendly
+  shapes (640×5120×8192 has a 48%-idle final wave → theory predicts ~+24%, measured 0.945×).
+  Why the 6.7× doesn't transfer: (a) it was measured on A100 (108 SMs) against specifically
+  constructed worst cases; (b) H100's 132 SMs shrink relative tail losses; (c) the sm_80
+  kernel's Stream-K reduction/fixup overhead on H100 eats the recovered tail. Honest
+  conclusion: Stream-K is a real technique for pathological shapes on the architecture it was
+  tuned for, but it is not a free win — and modern cuBLAS (nvjet) already embeds tile-raster
+  heuristics that make the baseline hard to beat.
   - **Question:** our WMMA kernel uses classic data-parallel tiling; on shapes where
     (M/tile × N/tile) is not a multiple of SM count, how much of the loss can Stream-K's
     K-loop splitting + atomic fixup recover?
@@ -116,9 +142,17 @@ repo's own kernels, so every external claim becomes a measured row in `results/b
     optionally implement Stream-K scheduling in our own kernel; measure both on H100 and sm_120.
   - **Read-out:** speedup vs data-parallel tiling per shape; worst-case shape variance reduction.
 
-- [ ] **Committed third-party baselines: DeepGEMM / ThunderKittens / FlashAttention-3.**
+- [x] **Committed third-party baselines: DeepGEMM / ThunderKittens / FlashAttention-3.**
   Published targets: DeepGEMM FP8 ~1358 TFLOPS (~78% of H100 FP8 peak); ThunderKittens FP8
   ~1500 TFLOPS; FlashAttention-3 FP16 740 TFLOPS (75% of peak).
+  **DONE — `scripts/run_reference_benches.sh` / `results/reference/` / README "Third-party
+  reference baselines".** Results on one idle H100 of this box (each project's own benchmark,
+  unmodified): DeepGEMM FP8 **1523 TFLOPS (77% of peak, 112% of the published H800 number)**,
+  DeepGEMM BF16 830 (84%); ThunderKittens FP8 **1465 (74%, 98% of published)**, BF16 775
+  (78%), FP8-scaled 985; FlashAttention-3 — see results/reference/fa3.txt (CUDA 13.1 container
+  build). Key reading: published numbers reproduce within ~±10% on this shared box → the
+  repo's own kernel gaps are real, not environmental. These rows are the honest ceiling for
+  Phase 3's FP8 work.
   - **Question:** what do the leading open-source kernels actually achieve on *this* H100 box
     (shared, no root, Max-Q-class power limits do not apply here but clock state does)?
   - **Method:** run each project's own benchmark (pip/JIT installs, no root needed); record

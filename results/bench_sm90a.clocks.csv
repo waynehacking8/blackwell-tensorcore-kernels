@@ -1,0 +1,2 @@
+index, clocks.current.sm [MHz], clocks.max.sm [MHz], temperature.gpu, power.draw [W]
+4, 345 MHz, 1980 MHz, 26, 72.37 W

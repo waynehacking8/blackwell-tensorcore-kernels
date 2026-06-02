@@ -1,0 +1,22 @@
+Obtaining file:///work/flash-attention/hopper
+  Checking if build backend supports build_editable: started
+  Checking if build backend supports build_editable: finished with status 'done'
+  Preparing editable metadata (pyproject.toml): started
+  Preparing editable metadata (pyproject.toml): finished with status 'done'
+Requirement already satisfied: torch in /usr/local/lib/python3.12/dist-packages (from flash_attn_3==3.0.0) (2.11.0a0+eb65b36914.nv26.2)
+Requirement already satisfied: einops in /usr/local/lib/python3.12/dist-packages (from flash_attn_3==3.0.0) (0.8.2)
+Requirement already satisfied: packaging in /usr/local/lib/python3.12/dist-packages (from flash_attn_3==3.0.0) (25.0)
+Requirement already satisfied: ninja in /usr/local/lib/python3.12/dist-packages (from flash_attn_3==3.0.0) (1.13.0)
+Requirement already satisfied: filelock in /usr/local/lib/python3.12/dist-packages (from torch->flash_attn_3==3.0.0) (3.24.2)
+Requirement already satisfied: typing-extensions>=4.10.0 in /usr/local/lib/python3.12/dist-packages (from torch->flash_attn_3==3.0.0) (4.15.0)
+Requirement already satisfied: setuptools in /usr/local/lib/python3.12/dist-packages (from torch->flash_attn_3==3.0.0) (81.0.0)
+Requirement already satisfied: sympy>=1.13.3 in /usr/local/lib/python3.12/dist-packages (from torch->flash_attn_3==3.0.0) (1.14.0)
+Requirement already satisfied: networkx>=2.5.1 in /usr/local/lib/python3.12/dist-packages (from torch->flash_attn_3==3.0.0) (3.6.1)
+Requirement already satisfied: jinja2 in /usr/local/lib/python3.12/dist-packages (from torch->flash_attn_3==3.0.0) (3.1.6)
+Requirement already satisfied: fsspec>=0.8.5 in /usr/local/lib/python3.12/dist-packages (from torch->flash_attn_3==3.0.0) (2025.10.0)
+Requirement already satisfied: mpmath<1.4,>=1.1.0 in /usr/local/lib/python3.12/dist-packages (from sympy>=1.13.3->torch->flash_attn_3==3.0.0) (1.3.0)
+Requirement already satisfied: MarkupSafe>=2.0 in /usr/local/lib/python3.12/dist-packages (from jinja2->torch->flash_attn_3==3.0.0) (3.0.3)
+Building wheels for collected packages: flash_attn_3
+  Building editable for flash_attn_3 (pyproject.toml): started
+  Building editable for flash_attn_3 (pyproject.toml): still running...
+  Building editable for flash_attn_3 (pyproject.toml): still running...

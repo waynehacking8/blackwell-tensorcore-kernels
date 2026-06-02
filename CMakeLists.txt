@@ -5,8 +5,27 @@ set(CMAKE_CUDA_STANDARD 17)
 if(NOT CMAKE_CUDA_ARCHITECTURES)
   set(CMAKE_CUDA_ARCHITECTURES 90 120)
 endif()
-add_executable(gemm_bench
+
+set(BENCH_SOURCES
   src/main.cu src/gemm_naive.cu src/gemm_tiled.cu src/gemm_wmma.cu src/gemm_mma.cu
   src/reference.cu src/cublas_tc.cu src/cublas_tf32.cu)
+
+# Phase 2.5: CUTLASS 3.x wgmma kernel — Hopper only (sm_90a), needs CUTLASS headers.
+#   cmake -DCMAKE_CUDA_ARCHITECTURES=90a -DCUTLASS_DIR=/path/to/cutlass ..
+# wgmma requires the 90a feature target; the kernel is skipped on plain 90 / 120 builds.
+set(CUTLASS_DIR "" CACHE PATH "Path to a CUTLASS >= 3.4 checkout (enables the cutlass_sm90 kernel row)")
+if(CUTLASS_DIR AND CMAKE_CUDA_ARCHITECTURES MATCHES "90a")
+  list(APPEND BENCH_SOURCES src/cutlass_sm90.cu)
+  add_compile_definitions(HAVE_CUTLASS_SM90)
+  message(STATUS "cutlass_sm90 kernel ENABLED (CUTLASS at ${CUTLASS_DIR})")
+else()
+  message(STATUS "cutlass_sm90 kernel disabled (set -DCUTLASS_DIR=... and -DCMAKE_CUDA_ARCHITECTURES=90a)")
+endif()
+
+add_executable(gemm_bench ${BENCH_SOURCES})
 target_include_directories(gemm_bench PRIVATE include)
+if(CUTLASS_DIR AND CMAKE_CUDA_ARCHITECTURES MATCHES "90a")
+  target_include_directories(gemm_bench PRIVATE
+    ${CUTLASS_DIR}/include ${CUTLASS_DIR}/tools/util/include)
+endif()
 target_link_libraries(gemm_bench PRIVATE cublas)

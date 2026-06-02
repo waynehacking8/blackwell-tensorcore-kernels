@@ -1,0 +1,130 @@
+
+=============
+== PyTorch ==
+=============
+
+NVIDIA Release 26.02 (build 269443099)
+PyTorch Version 2.11.0a0+eb65b36
+Container image Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+Copyright (c) 2014-2024 Facebook Inc.
+Copyright (c) 2011-2014 Idiap Research Institute (Ronan Collobert)
+Copyright (c) 2012-2014 Deepmind Technologies    (Koray Kavukcuoglu)
+Copyright (c) 2011-2012 NEC Laboratories America (Koray Kavukcuoglu)
+Copyright (c) 2011-2013 NYU                      (Clement Farabet)
+Copyright (c) 2006-2010 NEC Laboratories America (Ronan Collobert, Leon Bottou, Iain Melvin, Jason Weston)
+Copyright (c) 2006      Idiap Research Institute (Samy Bengio)
+Copyright (c) 2001-2004 Idiap Research Institute (Ronan Collobert, Samy Bengio, Johnny Mariethoz)
+Copyright (c) 2015      Google Inc.
+Copyright (c) 2015      Yangqing Jia
+Copyright (c) 2013-2016 The Caffe contributors
+All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+NOTE: CUDA Forward Compatibility mode ENABLED.
+  Using CUDA 13.1 driver version 590.48.01 with kernel driver version 580.159.03.
+  See https://docs.nvidia.com/deploy/cuda-compatibility/ for details.
+
+--- kernels/gemm/bf16_h100 ---
+ptxas info    : Used 7 registers, used 0 barriers
+ptxas info    : Compile time = 0.987 ms
+ptxas info    : Compiling entry function '_Z11fill_kernelI13__nv_bfloat16L8FillMode1EEvPT_mmff' for 'sm_90a'
+ptxas info    : Function properties for _Z11fill_kernelI13__nv_bfloat16L8FillMode1EEvPT_mmff
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 10 registers, used 0 barriers
+ptxas info    : Compile time = 1.512 ms
+nvlink info    : 0 bytes gmem
+run ./bf16_h100_gemm.out
+--------------------  M=4096 N=4096 K=4096  --------------------
+Block size: 128x256
+Allocated device memory
+Initialized matrices on device
+Computed reference GEMM on device
+Average kernel execution time: 177.446 us
+Achieved performance: 774.538 TFLOPs
+abs mean:      17.0158
+abs max:         114.5
+err mean:    6.522e-05
+err max:           0.5
+--- kernels/gemm/fp8_h100 ---
+ptxas info    : Used 168 registers, used 16 barriers, 80 bytes smem
+ptxas info    : Compile time = 286.405 ms
+ptxas info    : Compiling entry function '_Z21reference_gemm_kernelI13__nv_fp8_e4m3S0_Lb1EEvPT0_PKT_S5_iii' for 'sm_90a'
+ptxas info    : Function properties for _Z21reference_gemm_kernelI13__nv_fp8_e4m3S0_Lb1EEvPT0_PKT_S5_iii
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 22 registers, used 0 barriers
+ptxas info    : Compile time = 5.439 ms
+nvlink info    : 0 bytes gmem
+run ./fp8_h100_gemm.out
+--------------------  M=4096 N=4096 K=4096  --------------------
+Allocated host memory
+Initialized matrices
+Allocated device memory
+Copied matrices to device
+Computed reference GEMM on device
+Launching warmup kernel with grid (132, 1), block (384)
+Launching kernel with grid (132, 1), block (384)
+Avg Kernel execution time: 93.8134 us
+Achieved performance: 1465.02 TFLOPs
+Copied result back to host
+Converted result back to float
+Max error: 0.25
+Average error: 3.39492e-05
+Average ref: 0.401998
+Average ours: 0.401842
+Error count: 0
+--- kernels/gemm/fp8_h100_scaled ---
+ptxas info    : Used 168 registers, used 16 barriers, 128 bytes cumulative stack size, 80 bytes smem
+ptxas info    : Compile time = 142.226 ms
+ptxas info    : Compiling entry function '_Z21reference_gemm_kernelIffLb1EEvPT0_PKT_S4_iii' for 'sm_90a'
+ptxas info    : Function properties for _Z21reference_gemm_kernelIffLb1EEvPT0_PKT_S4_iii
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 30 registers, used 0 barriers
+ptxas info    : Compile time = 7.944 ms
+nvlink info    : 0 bytes gmem
+run ./fp8_h100_gemm_scaled.out
+--------------------  M=4096 N=4096 K=4096  --------------------
+Allocated host memory
+Initialized matrices
+Allocated device memory
+Computed reference GEMM on device
+h_scale_a[0] = 0.00189872, max_val: 0.850626
+h_scale_a[1] = 0.00139898, max_val: 0.626741
+h_scale_a[2] = 0.00148281, max_val: 0.6643
+h_scale_a[3] = 0.00163559, max_val: 0.732745
+h_scale_a[4] = 0.00183141, max_val: 0.820471
+h_scale_a[5] = 0.00162835, max_val: 0.729502
+h_scale_a[6] = 0.0018694, max_val: 0.837493
+h_scale_a[7] = 0.00194751, max_val: 0.872483
+h_scale_a[8] = 0.00155037, max_val: 0.694567
+h_scale_a[9] = 0.00182045, max_val: 0.815563
+h_scale_b[0] = 0.00165374, max_val: 0.740876
+h_scale_b[1] = 0.00183361, max_val: 0.821455
+h_scale_b[2] = 0.0018056, max_val: 0.80891
+h_scale_b[3] = 0.00188172, max_val: 0.843011
+h_scale_b[4] = 0.00187897, max_val: 0.841776
+h_scale_b[5] = 0.00159222, max_val: 0.713315
+h_scale_b[6] = 0.00172172, max_val: 0.77133
+h_scale_b[7] = 0.00190324, max_val: 0.852653
+h_scale_b[8] = 0.00158889, max_val: 0.711821
+h_scale_b[9] = 0.00180558, max_val: 0.808899
+Copied matrices to device
+Launching warmup kernel with grid (132, 1), block (384)
+Launching kernel with grid (132, 1), block (384)
+Avg Kernel execution time: 139.468 us
+Achieved performance: 985.454 TFLOPs
+Copied result back to host
+Converted result back to float
+Num rows: 4096, Num cols: 4096
+Max error: 0.514642
+Average error: 0.074853
+Average ref: 2.011173
+Average ours: 2.009555
+Average input_a: 0.156085
+Average input_b: 0.156159
+Error count: 0

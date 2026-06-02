@@ -1,0 +1,120 @@
+===== default example sweep =====
+10000 timing iterations of 2048 x 2048 x 2048 matrix-matrix multiply
+
+Basic data-parallel GEMM
+  Disposition: Passed
+  Avg runtime: 0.0347366 ms
+  GFLOPs: 494575
+
+StreamK GEMM with default load-balancing
+  Disposition: Passed
+  Avg runtime: 0.0368333 ms
+  GFLOPs: 466422
+  Speedup vs Basic-DP: 0.943
+
+StreamK emulating basic data-parallel GEMM
+  Disposition: Passed
+  Avg runtime: 0.0369074 ms
+  GFLOPs: 465485
+  Speedup vs Basic-DP: 0.941
+
+Basic split-K GEMM with tile-splitting factor 2
+  Disposition: Passed
+  Avg runtime: 0.0395182 ms
+  GFLOPs: 434733
+
+StreamK emulating Split-K GEMM with tile-splitting factor 2
+  Disposition: Passed
+  Avg runtime: 0.0404702 ms
+  GFLOPs: 424507
+  Speedup vs Basic-SplitK: 0.976
+===== m=3456 n=4096 k=4096 (wave-quantization-unfriendly) =====
+10000 timing iterations of 3456 x 4096 x 4096 matrix-matrix multiply
+
+Basic data-parallel GEMM
+  Disposition: Passed
+  Avg runtime: 0.239112 ms
+  GFLOPs: 484978
+
+StreamK GEMM with default load-balancing
+  Disposition: Passed
+  Avg runtime: 0.244565 ms
+  GFLOPs: 474165
+  Speedup vs Basic-DP: 0.978
+
+StreamK emulating basic data-parallel GEMM
+  Disposition: Passed
+  Avg runtime: 0.241638 ms
+  GFLOPs: 479908
+  Speedup vs Basic-DP: 0.990
+
+Basic split-K GEMM with tile-splitting factor 2
+  Disposition: Passed
+  Avg runtime: 0.24458 ms
+  GFLOPs: 474136
+
+StreamK emulating Split-K GEMM with tile-splitting factor 2
+  Disposition: Passed
+  Avg runtime: 0.246166 ms
+  GFLOPs: 471081
+  Speedup vs Basic-SplitK: 0.994
+===== m=1152 n=7680 k=8192 (wave-quantization-unfriendly) =====
+10000 timing iterations of 1152 x 7680 x 8192 matrix-matrix multiply
+
+Basic data-parallel GEMM
+  Disposition: Passed
+  Avg runtime: 0.317219 ms
+  GFLOPs: 456956
+
+StreamK GEMM with default load-balancing
+  Disposition: Passed
+  Avg runtime: 0.302131 ms
+  GFLOPs: 479776
+  Speedup vs Basic-DP: 1.050
+
+StreamK emulating basic data-parallel GEMM
+  Disposition: Passed
+  Avg runtime: 0.326792 ms
+  GFLOPs: 443570
+  Speedup vs Basic-DP: 0.971
+
+Basic split-K GEMM with tile-splitting factor 2
+  Disposition: Passed
+  Avg runtime: 0.305235 ms
+  GFLOPs: 474896
+
+StreamK emulating Split-K GEMM with tile-splitting factor 2
+  Disposition: Passed
+  Avg runtime: 0.30902 ms
+  GFLOPs: 469081
+  Speedup vs Basic-SplitK: 0.988
+===== m=640 n=5120 k=8192 (wave-quantization-unfriendly) =====
+10000 timing iterations of 640 x 5120 x 8192 matrix-matrix multiply
+
+Basic data-parallel GEMM
+  Disposition: Passed
+  Avg runtime: 0.131046 ms
+  GFLOPs: 409683
+
+StreamK GEMM with default load-balancing
+  Disposition: Passed
+  Avg runtime: 0.138741 ms
+  GFLOPs: 386958
+  Speedup vs Basic-DP: 0.945
+
+StreamK emulating basic data-parallel GEMM
+  Disposition: Passed
+  Avg runtime: 0.137446 ms
+  GFLOPs: 390606
+  Speedup vs Basic-DP: 0.953
+
+Basic split-K GEMM with tile-splitting factor 2
+  Disposition: Passed
+  Avg runtime: 0.133666 ms
+  GFLOPs: 401652
+
+StreamK emulating Split-K GEMM with tile-splitting factor 2
+  Disposition: Passed
+  Avg runtime: 0.138858 ms
+  GFLOPs: 386634
+  Speedup vs Basic-SplitK: 0.963

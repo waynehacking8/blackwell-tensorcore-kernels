@@ -27,6 +27,9 @@ void launch_mma_swizzle (const float*,const float*,float*,int,int,int);
 void launch_mma_vec     (const float*,const float*,float*,int,int,int);
 void launch_mma_pipe    (const float*,const float*,float*,int,int,int);
 void launch_mma_warptile(const float*,const float*,float*,int,int,int);
+#ifdef HAVE_CUTLASS_SM90
+void launch_cutlass_sm90(const float*,const float*,float*,int,int,int); // CUTLASS 3.x TMA+wgmma (Hopper only)
+#endif
 
 struct Kern{ const char* name; void(*fn)(const float*,const float*,float*,int,int,int); };
 
@@ -56,6 +59,9 @@ int main(int argc,char**argv){
                 {"mma_base",launch_mma_base},{"mma_swizzle",launch_mma_swizzle},
                 {"mma_vec",launch_mma_vec},{"mma_pipe",launch_mma_pipe},
                 {"mma_warptile",launch_mma_warptile},
+#ifdef HAVE_CUTLASS_SM90
+                {"cutlass_sm90",launch_cutlass_sm90},
+#endif
                 {"cublas",launch_cublas},{"cublas_tf32",launch_cublas_tf32},{"cublas_tc",launch_cublas_tc}};
   struct Row{ const char* name; float ms, tf; double err; };
   std::vector<Row> rows;
