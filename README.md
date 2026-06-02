@@ -220,16 +220,16 @@ only); these are the precisions reachable through the plain `mma` path:
 
 | kernel | format / instruction | TFLOP/s @ 8192³ | vs FP16 | max_abs_err |
 |---|---|---|---|---|
-| `mma_warptile` | FP16 · `m16n8k16` (HMMA) | 241.2 | 1.00× | 0.0112 |
-| `mma_fp8` | FP8 E4M3 · `m16n8k32` (QMMA) | 493.0 | **2.04×** | 1.4 |
-| `mma_fp4` | FP4-in-8bit · `kind::f8f6f4` (QMMA) | 519.0 | 2.15× | 5.97 |
-| **`mma_mxfp4`** | **packed FP4 + block scale · `kind::mxf4` (OMMA.SF)** | **951.9** | **3.95×** | 5.97 |
+| `mma_warptile` | FP16 · `m16n8k16` (HMMA) | 241.5 | 1.00× | 0.0112 |
+| `mma_fp8` | FP8 E4M3 · `m16n8k32` (QMMA) | 503.7 | **2.09×** | 1.4 |
+| `mma_fp4` | FP4-in-8bit · `kind::f8f6f4` (QMMA) | 520.5 | 2.16× | 5.97 |
+| **`mma_mxfp4`** | **packed FP4 + block scale · `kind::mxf4` (OMMA.SF)** | **992.6** | **4.11×** | 5.97 |
 | `cublas_tc` | FP16 (cuBLAS) | 226.9 | — | 0.0112 |
-| `cublaslt_fp8` | FP8 E4M3 (cuBLASLt) | 555.5 | 2.30× | 1.4 |
+| `cublaslt_fp8` | FP8 E4M3 (cuBLASLt) | 553.5 | 2.29× | 1.4 |
 
 ![precision Pareto](results/precision_pareto_sm120.png)
 
-The ladder delivers the 5th-gen Tensor Core spec almost exactly — **2.04× for FP8, 3.95× for
+The ladder delivers the 5th-gen Tensor Core spec almost exactly — **2.09× for FP8, 4.11× for
 packed FP4** — and the Pareto chart shows the price: each 2× costs roughly a decimal digit
 of accuracy (max_abs_err 0.011 → 1.4 → 6.0 at K=8192). Three findings worth quoting
 (full analysis in [`results/phase3_lowprec.md`](results/phase3_lowprec.md)):
@@ -237,11 +237,12 @@ of accuracy (max_abs_err 0.011 → 1.4 → 6.0 at K=8192). Three findings worth 
 - **Unpacked FP4 is pointless.** `kind::f8f6f4` stores E2M1 in 8-bit containers and shares the
   QMMA pipeline → FP8 speed at 4× FP8's error. The 2×-over-FP8 exists only in the packed,
   block-scaled `kind::mxf4` path (OMMA.SF in SASS).
-- **Our FP8 is 88.8% of cuBLASLt FP8** (493 vs 555). The tile shape that *beats* cuBLAS at FP16
-  becomes feed-bound when the math runs 2× faster — the next optimization is a larger CTA tile,
-  not better instruction scheduling.
-- **cuBLAS has no FP4 GEMM on sm_120** (no public ceiling exists) — the 952 TFLOP/s MXFP4 row
-  is this card's first-hand FP4 data point, at ~54% of the theoretical FP4 peak.
+- **Our FP8 is 91.0% of cuBLASLt FP8** (504 vs 554) — and cuBLASLt's kernel uses the *same* tile,
+  warp layout and instruction as ours. Larger tiles and deeper pipelines measured as dead ends;
+  the gap is xmma's instruction-level scheduling. Register-pipelined fragments (this kernel's
+  mainloop) buy 493 → 504; the last 9% needs finer interleaving.
+- **cuBLAS has no FP4 GEMM on sm_120** (no public ceiling exists) — the 993 TFLOP/s MXFP4 row
+  is this card's first-hand FP4 data point, at ~56% of the theoretical FP4 peak.
 
 ### Measured on H100 80GB SXM5 (sm_90, CUDA 13.1) — the cross-generation result
 

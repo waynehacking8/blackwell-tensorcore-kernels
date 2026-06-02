@@ -45,13 +45,13 @@ At M=N=K=8192:
 | mma_vec | 165.3 | 301.3% | 72.1% | 0.0112 |
 | mma_pipe | 178.0 | 324.5% | 77.7% | 0.0112 |
 | mma_warptile | 243.2 | 443.3% | 106.1% | 0.0112 |
-| mma_fp8 | 493.0 | 916.6% | 215.1% | 1.4 |
-| mma_fp4 | 519.0 | 964.9% | 226.4% | 5.97 |
-| mma_mxfp4 | 951.9 | 1769.8% | 415.3% | 5.97 |
+| mma_fp8 | 503.7 | 0.0% | 219.8% | 1.4 |
+| mma_fp4 | 520.5 | 0.0% | 227.1% | 5.97 |
+| mma_mxfp4 | 992.6 | 0.0% | 433.1% | 5.97 |
 | cublas | 54.8 | 100.0% | 23.9% | 0 |
 | cublas_tf32 | 152.7 | 278.4% | 66.6% | 0.0113 |
 | cublas_tc | 229.2 | 417.9% | 100.0% | 0.0112 |
-| cublaslt_fp8 | 555.5 | 1032.8% | 242.4% | 1.4 |
+| cublaslt_fp8 | 553.5 | 0.0% | 241.5% | 1.4 |
 
 > Precision ladder, all on the **same card**: **cublas** = `cublasSgemm` (FP32, CUDA cores); **cublas_tf32** = `cublasGemmEx` (FP32 in, TF32 compute, Tensor Cores); **cublas_tc** = `cublasGemmEx` (FP16 in / FP32 acc, Tensor Cores) — the honest same-precision ceiling for `wmma`. **% of FP32 cuBLAS** is precision-mismatched (FP16/TF32-TC vs FP32-CUDA-core), so its `>100%` rows are **not** a kernel beating cuBLAS. Quote **% of cuBLAS-TC**.
 

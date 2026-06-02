@@ -172,17 +172,17 @@ Full analysis: `results/mma_ablation.md`.
 
 ## Phase 3 FP8/FP4 kernels — throughput ratios vs hardware spec
 
-The Phase 3 kernels (`src/gemm_mma_fp8.cu`, sm_120a build) claim **2.04× (FP8)** and
-**3.95× (MXFP4)** over the FP16 kernel. Cross-checks:
+The Phase 3 kernels (`src/gemm_mma_fp8.cu`, sm_120a build) claim **2.09× (FP8)** and
+**4.11× (MXFP4)** over the FP16 kernel. Cross-checks:
 
 | check | evidence | verdict |
 |---|---|---|
-| FP8 ratio vs spec | 5th-gen TC spec: FP8 = 2× FP16. Measured: 493.0 / 241.2 = **2.04×** | ✓ |
-| FP4 ratio vs spec | packed FP4 = 4× FP16. Measured: 951.9 / 241.2 = **3.95×** | ✓ |
+| FP8 ratio vs spec | 5th-gen TC spec: FP8 = 2× FP16. Measured: 503.7 / 241.5 = **2.09×** | ✓ |
+| FP4 ratio vs spec | packed FP4 = 4× FP16. Measured: 992.6 / 241.5 = **4.11×** | ✓ |
 | Constant fraction of peak | ours = ~54% of (estimated full-rate) peak at FP16, FP8 and FP4; cuBLAS-TC = 51%, cuBLASLt FP8 = 62% — no precision is anomalous | ✓ |
 | FP8 math correctness | max_abs_err = 1.4 bit-identical to cuBLASLt FP8 (same E4M3 quantized inputs, same K) | ✓ |
 | FP4 math correctness | `mma_fp4` (QMMA, unpacked) and `mma_mxfp4` (OMMA.SF, packed + block-scale) agree exactly (max_abs_err 5.97) through two different instruction paths | ✓ |
-| Library baseline | cuBLASLt FP8 (E4M3, TN layout) = 555.5 TFLOP/s; ours = 88.8% of it — reported as-is, not hidden | ✓ |
+| Library baseline | cuBLASLt FP8 (E4M3, TN layout) = 553.5 TFLOP/s; ours = 91.0% of it — reported as-is, not hidden | ✓ |
 | Error scaling | max_abs_err 0.011 (FP16) → 1.4 (FP8) → 6.0 (FP4) tracks 2^-10 / 2^-3 / 2^-1 mantissa widths at K=8192 | ✓ |
 | Session continuity | same-session FP16 rows reproduce committed values within −0.8% / −1.0% (clock-cap variance) | ✓ |
 
