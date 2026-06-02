@@ -1,0 +1,7 @@
+device,sm,M,N,K,kernel,ms,tflops,pct_of_cublas,max_abs_err
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_pipe@s2,6.150,178.78,0.0,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_warptile@s2,4.511,243.73,0.0,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_pipe@s3,6.366,172.72,0.0,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_warptile@s3,4.613,238.37,0.0,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_pipe@s4,7.249,151.68,0.0,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_warptile@s4,6.099,180.28,0.0,0.0112

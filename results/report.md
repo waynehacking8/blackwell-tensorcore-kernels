@@ -29,6 +29,8 @@ At M=N=K=8192:
 
 ![throughput bar at 8192](roofline_sm120.png)
 
+![mma.sync ablation ladder](mma_ablation_sm120.png)
+
 At M=N=K=8192:
 
 | kernel | TFLOP/s | % of FP32 cuBLAS | % of cuBLAS-TC | max abs err |
@@ -36,6 +38,11 @@ At M=N=K=8192:
 | naive | 4.8 | 8.7% | 2.1% | 0 |
 | tiled | 7.3 | 13.3% | 3.2% | 0 |
 | wmma | 103.5 | 188.7% | 45.2% | 0.0112 |
+| mma_base | 47.4 | 86.3% | 20.7% | 0.0112 |
+| mma_swizzle | 58.6 | 106.9% | 25.6% | 0.0112 |
+| mma_vec | 165.3 | 301.3% | 72.1% | 0.0112 |
+| mma_pipe | 178.0 | 324.5% | 77.7% | 0.0112 |
+| mma_warptile | 243.2 | 443.3% | 106.1% | 0.0112 |
 | cublas | 54.8 | 100.0% | 23.9% | 0 |
 | cublas_tf32 | 152.7 | 278.4% | 66.6% | 0.0113 |
 | cublas_tc | 229.2 | 417.9% | 100.0% | 0.0112 |

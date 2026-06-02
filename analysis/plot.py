@@ -12,17 +12,27 @@ import csv, os, collections
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSV  = os.path.join(HERE, "results", "bench.csv")
 # precision ladder: cublas=Sgemm(FP32,CUDA cores); cublas_tf32=GemmEx(FP32 in/TF32 compute,TC);
-# cublas_tc=GemmEx(FP16 in/FP32 acc,TC) — the honest same-precision ceiling for wmma.
-KORDER = ["naive", "tiled", "wmma", "cublas", "cublas_tf32", "cublas_tc"]
+# cublas_tc=GemmEx(FP16 in/FP32 acc,TC) — the honest same-precision ceiling for wmma/mma.
+KORDER = ["naive", "tiled", "wmma",
+          "mma_base", "mma_swizzle", "mma_vec", "mma_pipe", "mma_warptile",
+          "cublas", "cublas_tf32", "cublas_tc"]
 # consistent colour + style per kernel across all charts
 STYLE = {
     "naive":       ("#9aa0a6", "o", "naive (CUDA core)"),
     "tiled":       ("#5f6368", "s", "tiled (CUDA core)"),
     "wmma":        ("#1a73e8", "D", "wmma (our kernel, FP16-TC)"),
+    # hand-written mma.sync ablation ladder (Phase 2) — purple gradient, base -> final
+    "mma_base":     ("#d2a8ff", "o", "mma_base (raw mma.sync)"),
+    "mma_swizzle":  ("#b388eb", "s", "mma_swizzle (+swizzled smem)"),
+    "mma_vec":      ("#9059d6", "v", "mma_vec (+cp.async 16B)"),
+    "mma_pipe":     ("#6f2dbd", "^", "mma_pipe (+2-stage pipeline)"),
+    "mma_warptile": ("#4a0d67", "P", "mma_warptile (+64x64 warp tile) — final"),
     "cublas":      ("#b31412", "^", "cuBLAS FP32 (cublasSgemm)"),
     "cublas_tf32": ("#e8710a", "v", "cuBLAS TF32-TC (cublasGemmEx)"),
     "cublas_tc":   ("#188038", "*", "cuBLAS FP16-TC (cublasGemmEx) — ceiling"),
 }
+# the mma.sync ablation ladder, in optimization order (for the ablation chart)
+MMA_LADDER = ["wmma", "mma_base", "mma_swizzle", "mma_vec", "mma_pipe", "mma_warptile"]
 
 
 def load(path):
@@ -86,7 +96,7 @@ def main():
             # ---- Chart 2: % of cuBLAS-TC (same-precision ceiling) ----
             tc = {s: tf for (s, tf, *_ ) in sorted(kerns.get("cublas_tc", []))}
             fig, ax = plt.subplots(figsize=(8, 5))
-            for k in ["naive","tiled","wmma","cublas","cublas_tf32"]:
+            for k in [x for x in KORDER if x != "cublas_tc"]:
                 if k in kerns and tc:
                     c, m, lab = STYLE[k]
                     pts = [(s, 100*tf/tc[s]) for (s,tf,*_ ) in sorted(kerns[k]) if s in tc]
@@ -96,7 +106,10 @@ def main():
             ax.get_xaxis().set_major_formatter(plt.matplotlib.ticker.ScalarFormatter())
             ax.set_xlabel("matrix size  M=N=K"); ax.set_ylabel("% of cuBLAS FP16-TC (same precision)")
             ax.set_title(f"Fraction of the honest Tensor Core ceiling — {short} (sm_{sm})")
-            ax.set_ylim(0, 112)  # headroom so the 100% ceiling line sits clear of the frame
+            # headroom above the highest line (mma_warptile exceeds the 100% ceiling on sm_120)
+            ymax = max([100] + [100*tf/tc[s] for k in KORDER if k in kerns and k != "cublas_tc"
+                                for (s,tf,*_ ) in kerns[k] if s in tc])
+            ax.set_ylim(0, ymax * 1.12)
             # legend below the axes so the 100% dashed line never crosses it
             leg = ax.legend(fontsize=8, framealpha=1.0, loc="upper center",
                             bbox_to_anchor=(0.5, -0.13), ncol=3)
@@ -122,6 +135,37 @@ def main():
             lines.append(f"![throughput vs size]({p1})\n")
             lines.append(f"![% of cuBLAS-TC]({p2})\n")
             lines.append(f"![throughput bar at {big}]({p3})\n")
+
+            # ---- Chart 4 (only when mma.sync rows exist): the ablation ladder ----
+            # wmma -> mma_base -> ... -> mma_warptile as % of cuBLAS-TC at the largest size.
+            ladder = [k for k in MMA_LADDER if k in kerns]
+            tc_big = next((tf for (s, tf, *_ ) in sorted(kerns.get("cublas_tc", [])) if s == big), None)
+            if len(ladder) > 1 and tc_big:
+                fig, ax = plt.subplots(figsize=(9, 5))
+                vals, labs, cols = [], [], []
+                for k in ladder:
+                    row = next((r for r in sorted(kerns[k]) if r[0] == big), None)
+                    if row:
+                        vals.append(100 * row[1] / tc_big)
+                        labs.append(STYLE[k][2])
+                        cols.append(STYLE[k][0])
+                bars = ax.barh(range(len(vals)), vals, color=cols)
+                for b, v in zip(bars, vals):
+                    ax.text(v + 1, b.get_y() + b.get_height() / 2, f"{v:.1f}%",
+                            va="center", fontsize=10, fontweight="bold")
+                ax.axvline(100, color=STYLE["cublas_tc"][0], ls="--", lw=2,
+                           label=f"cuBLAS FP16-TC ceiling ({tc_big:.0f} TFLOP/s)")
+                ax.set_yticks(range(len(labs))); ax.set_yticklabels(labs, fontsize=9)
+                ax.invert_yaxis()
+                ax.set_xlabel(f"% of cuBLAS FP16-TC at M=N=K={big}")
+                ax.set_title(f"Hand-written mma.sync ablation ladder — {short} (sm_{sm})\n"
+                             "each row adds one optimization")
+                ax.legend(fontsize=9, loc="upper right", framealpha=1.0)
+                ax.grid(True, axis="x", alpha=.3)
+                ax.set_xlim(0, max(vals) * 1.15)
+                p4 = f"mma_ablation_sm{sm}.png"
+                fig.tight_layout(); fig.savefig(os.path.join(HERE,"results",p4), dpi=140); plt.close(fig)
+                lines.append(f"![mma.sync ablation ladder]({p4})\n")
 
         tc_tf = next((r[1] for r in sorted(kerns.get("cublas_tc", [])) if r[0] == big), None)
         lines.append(f"At M=N=K={big}:\n")

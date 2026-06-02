@@ -59,3 +59,28 @@ device,sm,M,N,K,kernel,ms,tflops,pct_of_cublas,max_abs_err
 "NVIDIA H100 80GB HBM3",90,8192,8192,8192,cublas,23.229,47.33,100.0,0
 "NVIDIA H100 80GB HBM3",90,8192,8192,8192,cublas_tf32,2.633,417.64,882.3,0.0113
 "NVIDIA H100 80GB HBM3",90,8192,8192,8192,cublas_tc,1.443,761.71,1609.2,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,512,512,512,mma_base,0.076,3.54,179.9,0.00254
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,512,512,512,mma_swizzle,0.062,4.36,221.5,0.00254
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,512,512,512,mma_vec,0.019,14.43,733.3,0.00254
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,512,512,512,mma_pipe,0.017,15.69,797.7,0.00254
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,512,512,512,mma_warptile,0.018,14.98,761.6,0.00254
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,1024,1024,1024,mma_base,0.148,14.56,151.4,0.00376
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,1024,1024,1024,mma_swizzle,0.120,17.91,186.2,0.00376
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,1024,1024,1024,mma_vec,0.033,65.28,678.8,0.00376
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,1024,1024,1024,mma_pipe,0.031,69.19,719.5,0.00376
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,1024,1024,1024,mma_warptile,0.031,69.42,721.8,0.00376
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,2048,2048,2048,mma_base,0.365,47.01,130.6,0.00578
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,2048,2048,2048,mma_swizzle,0.250,68.82,191.2,0.00578
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,2048,2048,2048,mma_vec,0.125,137.01,380.7,0.00578
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,2048,2048,2048,mma_pipe,0.121,141.93,394.3,0.00578
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,2048,2048,2048,mma_warptile,0.083,207.01,575.1,0.00578
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,4096,4096,4096,mma_base,2.189,62.77,117.8,0.00769
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,4096,4096,4096,mma_swizzle,1.637,83.93,157.5,0.00769
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,4096,4096,4096,mma_vec,0.774,177.64,333.3,0.00769
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,4096,4096,4096,mma_pipe,0.737,186.36,349.7,0.00769
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,4096,4096,4096,mma_warptile,0.564,243.77,457.4,0.00769
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_base,23.220,47.35,86.3,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_swizzle,18.746,58.65,106.9,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_vec,6.653,165.26,301.3,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_pipe,6.176,178.03,324.5,0.0112
+"NVIDIA RTX PRO 6000 Blackwell Max-Q Workstation Edition",120,8192,8192,8192,mma_warptile,4.521,243.18,443.3,0.0112
