@@ -149,10 +149,12 @@ repo's own kernels, so every external claim becomes a measured row in `results/b
   reference baselines".** Results on one idle H100 of this box (each project's own benchmark,
   unmodified): DeepGEMM FP8 **1523 TFLOPS (77% of peak, 112% of the published H800 number)**,
   DeepGEMM BF16 830 (84%); ThunderKittens FP8 **1465 (74%, 98% of published)**, BF16 775
-  (78%), FP8-scaled 985; FlashAttention-3 — see results/reference/fa3.txt (CUDA 13.1 container
-  build). Key reading: published numbers reproduce within ~±10% on this shared box → the
-  repo's own kernel gaps are real, not environmental. These rows are the honest ceiling for
-  Phase 3's FP8 work.
+  (78%), FP8-scaled 985; FlashAttention-3 FP16 fwd **757 TFLOPS (77% of peak, 102% of the
+  published 740)** — with free FA2 (388) and cuDNN-attention (689) context rows from the same
+  benchmark. Build note: FA3's hopper/setup.py editable install (`pip install -e .`) fails at
+  packaging on the CUDA 13.1 container; non-editable `pip install .` works. Key reading:
+  published numbers reproduce within ~±10% on this shared box → the repo's own kernel gaps are
+  real, not environmental. These rows are the honest ceiling for Phase 3's FP8 work.
   - **Question:** what do the leading open-source kernels actually achieve on *this* H100 box
     (shared, no root, Max-Q-class power limits do not apply here but clock state does)?
   - **Method:** run each project's own benchmark (pip/JIT installs, no root needed); record

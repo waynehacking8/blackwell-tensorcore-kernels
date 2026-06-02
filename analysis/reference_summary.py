@@ -86,13 +86,24 @@ def parse_tk():
 
 
 def parse_fa3():
-    """Max forward TFLOPS from FA3's benchmark_attn.py output."""
+    """Max FA3 forward TFLOPS from benchmark_attn.py output (the file also reports FA2 and
+    cuDNN baselines - match the Fav3 lines only)."""
     txt = read("fa3.txt")
-    vals = [float(m) for m in re.findall(r"([\d.]+)\s*TFLOPS", txt, re.IGNORECASE)]
+    vals = [float(m) for m in re.findall(r"Fav3 fwd:[^,]+, ([\d.]+) TFLOPS", txt)]
     if not vals:
         return {}
-    return {"FlashAttention-3 FP16 fwd": {"tflops": max(vals), "peak": PEAK_FP16,
-                                          "published": 740, "pub_label": "740"}}
+    out = {"FlashAttention-3 FP16 fwd": {"tflops": max(vals), "peak": PEAK_FP16,
+                                         "published": 740, "pub_label": "740"}}
+    # the same file gives an in-container FA2 + cuDNN attention reference for free
+    fa2 = [float(m) for m in re.findall(r"Fav2 fwd:[^,]+, ([\d.]+) TFLOPS", txt)]
+    cudnn = [float(m) for m in re.findall(r"CuDNN fwd:[^,]+, ([\d.]+) TFLOPS", txt)]
+    if fa2:
+        out["FlashAttention-2 FP16 fwd"] = {"tflops": max(fa2), "peak": PEAK_FP16,
+                                            "published": None, "pub_label": "-"}
+    if cudnn:
+        out["cuDNN attention FP16 fwd"] = {"tflops": max(cudnn), "peak": PEAK_FP16,
+                                           "published": None, "pub_label": "-"}
+    return out
 
 
 def main():

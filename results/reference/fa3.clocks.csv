@@ -1,2 +1,2 @@
-index, name, clocks.current.sm [MHz], clocks.max.sm [MHz], clocks.current.memory [MHz], temperature.gpu, power.draw [W], power.limit [W]
-6, NVIDIA H100 80GB HBM3, 345 MHz, 1980 MHz, 2619 MHz, 28, 70.82 W, 700.00 W
+index, name, clocks.current.sm [MHz], clocks.max.sm [MHz], temperature.gpu, power.draw [W], power.limit [W]
+6, NVIDIA H100 80GB HBM3, 345 MHz, 1980 MHz, 28, 69.65 W, 700.00 W

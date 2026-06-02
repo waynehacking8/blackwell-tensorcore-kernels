@@ -30,3 +30,17 @@ NOTE: CUDA Forward Compatibility mode ENABLED.
   Using CUDA 13.1 driver version 590.48.01 with kernel driver version 580.159.03.
   See https://docs.nvidia.com/deploy/cuda-compatibility/ for details.
 
+
+### headdim = 128, causal = False, seqlen = 8192 ###
+Fav2 fwd: 2.831ms, 388.3 TFLOPS
+Fav2 bwd: 8.438ms, 325.8 TFLOPS
+CuDNN fwd: 1.596ms, 689.1 TFLOPS
+CuDNN bwd: 4.667ms, 589.0 TFLOPS
+Fav3 fwd: 1.453ms, 756.9 TFLOPS
+
+### headdim = 128, causal = True, seqlen = 8192 ###
+Fav2 fwd: 1.624ms, 338.5 TFLOPS
+Fav2 bwd: 4.544ms, 302.5 TFLOPS
+CuDNN fwd: 0.880ms, 624.5 TFLOPS
+CuDNN bwd: 2.632ms, 522.1 TFLOPS
+Fav3 fwd: 0.745ms, 738.3 TFLOPS

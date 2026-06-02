@@ -35,8 +35,8 @@ Hopper and Blackwell silicon.
 >    rebuilt with CUTLASS 3.x (TMA + `wgmma`) reaches **85.5% of cuBLAS-TC on H100** — a 10.5×
 >    recovery from the instruction class alone. Findings 1+3 are the same lesson on two
 >    architectures: reach the *current* generation's native instruction or lose the ceiling.
->    Third-party ceilings (DeepGEMM, ThunderKittens, Stream-K) are also measured on this box
->    as reference rows.
+>    Third-party ceilings (DeepGEMM, ThunderKittens, FlashAttention-3, Stream-K) are also
+>    measured on this box as reference rows — all within ±12% of their published numbers.
 
 ## What this is NOT
 - Not a cuBLAS replacement — cuBLAS is the ceiling measured against, honestly.
@@ -335,7 +335,9 @@ benchmarks, unmodified? (`scripts/run_reference_benches.sh`; raw logs + clock st
 | ThunderKittens FP8 | **1465** | 74% | ~1500 | **98%** |
 | ThunderKittens BF16 | 775 | 78% | ~760 | 102% |
 | ThunderKittens FP8 (per-block scaled) | 985 | 50% | — | — |
-| FlashAttention-3 FP16 fwd | see `results/reference/fa3.txt` | | 740 | |
+| FlashAttention-3 FP16 fwd | **757** | 77% | 740 | **102%** |
+| *FlashAttention-2 fwd (same file), context* | *388* | *39%* | — | — |
+| *cuDNN attention fwd (same file), context* | *689* | *70%* | — | — |
 | *cuBLAS FP16-TC (nvjet), context* | *750* | *76%* | — | — |
 | *this repo's WMMA kernel, context* | *61* | *6%* | — | — |
 | *this repo's CUTLASS wgmma kernel, context* | *641* | *65%* | — | — |

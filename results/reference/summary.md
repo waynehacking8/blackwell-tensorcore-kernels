@@ -12,6 +12,9 @@ different shapes - so the comparison is a sanity band, not a controlled experime
 | ThunderKittens BF16 | 775 | 78% | ~760 | 102% |
 | ThunderKittens FP8 | 1465 | 74% | ~1500 | 98% |
 | ThunderKittens FP8 (scaled) | 985 | 50% | - | - |
+| FlashAttention-3 FP16 fwd | 757 | 77% | 740 | 102% |
+| FlashAttention-2 FP16 fwd | 388 | 39% | - | - |
+| cuDNN attention FP16 fwd | 689 | 70% | - | - |
 
 Context (this repo's own committed rows, same box):
 
