@@ -170,6 +170,27 @@ workstation part runs full-rate Tensor Cores (our 243 exceeding the half-rate fi
 indicates it is full-rate); both our kernel (~55% of that) and cuBLAS (~52%) leave headroom.
 Full analysis: `results/mma_ablation.md`.
 
+## Phase 3 FP8/FP4 kernels — throughput ratios vs hardware spec
+
+The Phase 3 kernels (`src/gemm_mma_fp8.cu`, sm_120a build) claim **2.04× (FP8)** and
+**3.95× (MXFP4)** over the FP16 kernel. Cross-checks:
+
+| check | evidence | verdict |
+|---|---|---|
+| FP8 ratio vs spec | 5th-gen TC spec: FP8 = 2× FP16. Measured: 493.0 / 241.2 = **2.04×** | ✓ |
+| FP4 ratio vs spec | packed FP4 = 4× FP16. Measured: 951.9 / 241.2 = **3.95×** | ✓ |
+| Constant fraction of peak | ours = ~54% of (estimated full-rate) peak at FP16, FP8 and FP4; cuBLAS-TC = 51%, cuBLASLt FP8 = 62% — no precision is anomalous | ✓ |
+| FP8 math correctness | max_abs_err = 1.4 bit-identical to cuBLASLt FP8 (same E4M3 quantized inputs, same K) | ✓ |
+| FP4 math correctness | `mma_fp4` (QMMA, unpacked) and `mma_mxfp4` (OMMA.SF, packed + block-scale) agree exactly (max_abs_err 5.97) through two different instruction paths | ✓ |
+| Library baseline | cuBLASLt FP8 (E4M3, TN layout) = 555.5 TFLOP/s; ours = 88.8% of it — reported as-is, not hidden | ✓ |
+| Error scaling | max_abs_err 0.011 (FP16) → 1.4 (FP8) → 6.0 (FP4) tracks 2^-10 / 2^-3 / 2^-1 mantissa widths at K=8192 | ✓ |
+| Session continuity | same-session FP16 rows reproduce committed values within −0.8% / −1.0% (clock-cap variance) | ✓ |
+
+Caveats stated in `results/phase3_lowprec.md`: MXFP4 block-scale factors are fed as 1.0 with
+per-tensor (not per-32-block) input scaling — throughput-identical; accuracy generalizes only
+to data without per-block outliers. cuBLAS has no FP4 GEMM on sm_120, so the MXFP4 number has
+no library ceiling to compare against.
+
 ## H100 (sm_90) cross-check — does any of this transfer?
 
 The roadmap question: does the 45.2%-of-cuBLAS-TC result (and the tile/pipeline choices behind

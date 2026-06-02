@@ -40,8 +40,8 @@ Hopper and Blackwell silicon.
 
 ## What this is NOT
 - Not a cuBLAS replacement — cuBLAS is the ceiling measured against, honestly.
-- Not yet FP4 — Blackwell 5th-gen Tensor Core FP4/MXFP8 (tcgen05) is the documented frontier in
-  the roadmap, built on top of the working FP16 WMMA kernel.
+- Not tcgen05 — tensor-memory / CTA-pair instructions are sm_100 (B200) only. This card's
+  FP8/FP4 path is the regular `mma` instruction set, and that is what Phase 3 measures.
 
 ## Hardware
 - NVIDIA RTX Pro 6000 (Blackwell, sm_120) and/or H100 (Hopper, sm_90). CUDA 12.x+.
@@ -53,6 +53,8 @@ src/gemm_tiled.cu      # shared-memory tiled + register-blocked SIMT GEMM
 src/gemm_wmma.cu       # WMMA 16x16x16 Tensor Core GEMM (FP16 in, FP32 acc)
 src/gemm_mma.cu        # hand-written raw mma.sync m16n8k16 GEMM — 5-step ablation ladder (Phase 2)
 src/cutlass_sm90.cu    # CUTLASS 3.x TMA + wgmma GEMM, Hopper only (Phase 2.5)
+src/gemm_mma_fp8.cu    # FP8 (E4M3) / FP4 (E2M1) / MXFP4 GEMM via the sm_120 mma path (Phase 3)
+src/cublaslt_fp8.cu    # cuBLASLt FP8 baseline — the library FP8 ceiling (Phase 3)
 include/mma_ptx.cuh    # the PTX building blocks: mma.sync, ldmatrix, XOR swizzle, cp.async
 src/reference.cu       # cuBLAS FP32 ceiling (cublasSgemm, CUDA cores)
 src/cublas_tc.cu       # cuBLAS Tensor Core ceiling (cublasGemmEx, FP16 in / FP32 acc) — same precision as wmma/mma
@@ -208,6 +210,38 @@ What each step says (ablation reading, details in
   2:1) — the direct fix for the Phase 1 MIO-queue-full stall.
 - **The pipeline sweep flips vs WMMA**: 2 stages beat 3 (WMMA preferred 3). With ldmatrix
   feeding mma.sync directly, deeper buffering just costs occupancy.
+
+### Phase 3: FP8 / FP4 — the Blackwell formats, through the sm_120 mma path
+
+Same kernel skeleton as Phase 2 (128×128 CTA, 64×64 warp tile, swizzled smem, 2-stage
+`cp.async`), with the instruction swapped per precision — `src/gemm_mma_fp8.cu`, built for
+`sm_120a` (the FP4 kinds need it). tcgen05 is **not** available on this card (B200/sm_100
+only); these are the precisions reachable through the plain `mma` path:
+
+| kernel | format / instruction | TFLOP/s @ 8192³ | vs FP16 | max_abs_err |
+|---|---|---|---|---|
+| `mma_warptile` | FP16 · `m16n8k16` (HMMA) | 241.2 | 1.00× | 0.0112 |
+| `mma_fp8` | FP8 E4M3 · `m16n8k32` (QMMA) | 493.0 | **2.04×** | 1.4 |
+| `mma_fp4` | FP4-in-8bit · `kind::f8f6f4` (QMMA) | 519.0 | 2.15× | 5.97 |
+| **`mma_mxfp4`** | **packed FP4 + block scale · `kind::mxf4` (OMMA.SF)** | **951.9** | **3.95×** | 5.97 |
+| `cublas_tc` | FP16 (cuBLAS) | 226.9 | — | 0.0112 |
+| `cublaslt_fp8` | FP8 E4M3 (cuBLASLt) | 555.5 | 2.30× | 1.4 |
+
+![precision Pareto](results/precision_pareto_sm120.png)
+
+The ladder delivers the 5th-gen Tensor Core spec almost exactly — **2.04× for FP8, 3.95× for
+packed FP4** — and the Pareto chart shows the price: each 2× costs roughly a decimal digit
+of accuracy (max_abs_err 0.011 → 1.4 → 6.0 at K=8192). Three findings worth quoting
+(full analysis in [`results/phase3_lowprec.md`](results/phase3_lowprec.md)):
+
+- **Unpacked FP4 is pointless.** `kind::f8f6f4` stores E2M1 in 8-bit containers and shares the
+  QMMA pipeline → FP8 speed at 4× FP8's error. The 2×-over-FP8 exists only in the packed,
+  block-scaled `kind::mxf4` path (OMMA.SF in SASS).
+- **Our FP8 is 88.8% of cuBLASLt FP8** (493 vs 555). The tile shape that *beats* cuBLAS at FP16
+  becomes feed-bound when the math runs 2× faster — the next optimization is a larger CTA tile,
+  not better instruction scheduling.
+- **cuBLAS has no FP4 GEMM on sm_120** (no public ceiling exists) — the 952 TFLOP/s MXFP4 row
+  is this card's first-hand FP4 data point, at ~54% of the theoretical FP4 peak.
 
 ### Measured on H100 80GB SXM5 (sm_90, CUDA 13.1) — the cross-generation result
 

@@ -96,17 +96,26 @@ support through the regular `mma` instruction path. The items below are scoped t
 repo's hardware can actually run; tcgen05 work is parked as B200-only (see the literature-
 ceilings note for the B200 references).
 
-- [ ] FP8 (E4M3) Tensor Core GEMM via the sm_120 `mma` path; quality vs FP16; throughput delta.
-- [ ] FP4 (and MXFP4 block-scaling where the sm_120 mma path supports it) GEMM.
-- [ ] FP4 vs FP8 vs FP16 throughput/accuracy Pareto on RTX Pro 6000.
+- [x] FP8 (E4M3) Tensor Core GEMM via the sm_120 `mma` path; quality vs FP16; throughput delta.
+- [x] FP4 (and MXFP4 block-scaling where the sm_120 mma path supports it) GEMM.
+- [x] FP4 vs FP8 vs FP16 throughput/accuracy Pareto on RTX Pro 6000.
   - **Question:** how much throughput do Blackwell-generation formats buy on a workstation
     Blackwell card (sm_120), and at what accuracy cost?
-  - **Method:** implement the FP8 / FP4 kernels on top of the working mma.sync kernel (Phase 2's
-    `gemm_mma.cu` — full register control, already beats cuBLAS-TC at FP16); add them as new
-    kernel rows to `make bench`; plot the throughput (TFLOP/s) vs accuracy (max_abs_err) Pareto.
-  - **Read-out:** the Pareto frontier per precision; compare against cuBLAS's FP8 path where
-    available. Note: published "98–99% of cuBLAS" tcgen05 results (gau-nernst, MXFP8
-    block-scaled) are B200 numbers and are NOT reproduction targets for this hardware.
+  - **Method (as run):** three kernels on top of Phase 2's `gemm_mma.cu` structure (128×128 CTA,
+    64×64 warp tile, swizzle, 2-stage cp.async), in `src/gemm_mma_fp8.cu`: `mma_fp8`
+    (`mma.m16n8k32` E4M3), `mma_fp4` (`kind::f8f6f4`, E2M1 in 8-bit containers), `mma_mxfp4`
+    (`kind::mxf4.block_scale`, packed E2M1 + UE8M0 scales). cuBLASLt FP8 baseline in
+    `src/cublaslt_fp8.cu`. Build target sm_120a (the FP4 kinds need it). Both operands TN layout
+    (B transposed at staging, same for our kernels and cuBLASLt).
+  - **Result (8192³, raw rows in `bench.csv`, full analysis `results/phase3_lowprec.md`):**
+    **FP16 241 → FP8 493 (2.04×) → MXFP4 952 TFLOP/s (3.95×)** — the spec'd 2×/4× of the 5th-gen
+    Tensor Cores delivered through the plain mma path. Accuracy: max_abs_err 0.0112 → 1.4 → 6.0
+    (the Pareto's price axis, chart `precision_pareto_sm120.png`). Two findings:
+    (1) **unpacked FP4 (kind::f8f6f4) is pointless** — 519 TFLOP/s ≈ FP8 speed at 4× worse error
+    (it shares the QMMA pipe; only packed mxf4 reaches OMMA.SF and 2× FP8);
+    (2) **our FP8 = 88.8% of cuBLASLt FP8** (493 vs 555) — the FP16-winning tile shape becomes
+    feed-bound when math runs 2×; larger CTA tiles are the identified fix. cuBLAS has no FP4
+    path on sm_120, so the MXFP4 number is the card's only measured FP4 GEMM datapoint.
 - ~~Blackwell tcgen05 / tensor-memory GEMM~~ — **out of scope on this hardware** (sm_100 only).
 
 ## Phase 4 — Literature-ceiling reproductions on available hardware (specified)
