@@ -223,7 +223,7 @@ only); these are the precisions reachable through the plain `mma` path:
 | `mma_warptile` | FP16 · `m16n8k16` (HMMA) | 241.5 | 1.00× | 0.0112 |
 | `mma_fp8` | FP8 E4M3 · `m16n8k32` (QMMA) | 503.7 | **2.09×** | 1.4 |
 | `mma_fp4` | FP4-in-8bit · `kind::f8f6f4` (QMMA) | 520.5 | 2.16× | 5.97 |
-| **`mma_mxfp4`** | **packed FP4 + block scale · `kind::mxf4` (OMMA.SF)** | **992.6** | **4.11×** | 5.97 |
+| **`mma_mxfp4`** ¹ | **packed FP4 + block scale · `kind::mxf4` (OMMA.SF)** | **992.6** | **4.11×** | 5.97 |
 | `cublas_tc` | FP16 (cuBLAS) | 226.9 | — | 0.0112 |
 | `cublaslt_fp8` | FP8 E4M3 (cuBLASLt) | 553.5 | 2.29× | 1.4 |
 
@@ -234,6 +234,12 @@ packed FP4** — and the Pareto chart shows the price: each 2× costs roughly a 
 of accuracy (max_abs_err 0.011 → 1.4 → 6.0 at K=8192). Three findings worth quoting
 (full analysis in [`results/phase3_lowprec.md`](results/phase3_lowprec.md)):
 
+> ¹ **The 4.11× is a throughput result.** The MXFP4 block-scale factors are fed as 1.0 (UE8M0 =
+> 127), i.e. per-tensor, not per-32-element-block, scaling — the hardware does identical work and
+> the OMMA.SF rate is real, but the numerics do not exercise real per-block MXFP4 scaling (for the
+> uniform test matrices per-block scales would be ≈ identical anyway; real-world activation
+> outliers would widen the accuracy gap). See [`results/phase3_lowprec.md`](results/phase3_lowprec.md).
+
 - **Unpacked FP4 is pointless.** `kind::f8f6f4` stores E2M1 in 8-bit containers and shares the
   QMMA pipeline → FP8 speed at 4× FP8's error. The 2×-over-FP8 exists only in the packed,
   block-scaled `kind::mxf4` path (OMMA.SF in SASS).
@@ -242,7 +248,8 @@ of accuracy (max_abs_err 0.011 → 1.4 → 6.0 at K=8192). Three findings worth 
   the gap is xmma's instruction-level scheduling. Register-pipelined fragments (this kernel's
   mainloop) buy 493 → 504; the last 9% needs finer interleaving.
 - **cuBLAS has no FP4 GEMM on sm_120** (no public ceiling exists) — the 993 TFLOP/s MXFP4 row
-  is this card's first-hand FP4 data point, at ~56% of the theoretical FP4 peak.
+  is this card's first-hand FP4 data point, at ~56% of the theoretical FP4 peak (a throughput
+  data point — see footnote ¹ on the per-tensor block-scale caveat).
 
 ### Measured on H100 80GB SXM5 (sm_90, CUDA 13.1) — the cross-generation result
 

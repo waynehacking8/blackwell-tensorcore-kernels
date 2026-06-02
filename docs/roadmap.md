@@ -109,7 +109,10 @@ ceilings note for the B200 references).
     (B transposed at staging, same for our kernels and cuBLASLt).
   - **Result (8192³, raw rows in `bench.csv`, full analysis `results/phase3_lowprec.md`):**
     **FP16 242 → FP8 504 (2.09×) → MXFP4 993 TFLOP/s (4.11×)** — the spec'd 2×/4× of the 5th-gen
-    Tensor Cores delivered through the plain mma path. Accuracy: max_abs_err 0.0112 → 1.4 → 6.0
+    Tensor Cores delivered through the plain mma path. (The MXFP4 4.11× is a *throughput* result:
+    block-scale factors are fed as 1.0 / per-tensor, not per-32-element-block — identical hardware
+    work, but the numerics do not exercise real per-block MXFP4 scaling; see
+    `results/phase3_lowprec.md`.) Accuracy: max_abs_err 0.0112 → 1.4 → 6.0
     (the Pareto's price axis, chart `precision_pareto_sm120.png`). Two findings:
     (1) **unpacked FP4 (kind::f8f6f4) is pointless** — 520 TFLOP/s ≈ FP8 speed at 4× worse error
     (it shares the QMMA pipe; only packed mxf4 reaches OMMA.SF and 2× FP8);
