@@ -4,9 +4,13 @@
 // so a size sweep — and separate runs on different GPUs (H100 sm_90 / Blackwell
 // sm_120) — accumulate into one file that analysis/plot.py can chart directly.
 //
-//   ./gemm_bench [M] [N] [K] [out_csv]      out_csv defaults to results/bench.csv
+//   ./gemm_bench [M] [N] [K] [out_csv] [kernels]
+//     out_csv defaults to results/bench.csv
+//     kernels: optional comma-separated filter (e.g. "mma_pipe,cublas_tc");
+//              default runs every kernel
 #include "util.cuh"
 #include <vector>
+#include <string>
 #include <cstdio>
 #include <cstring>
 #include <unistd.h>
@@ -17,12 +21,19 @@ void launch_wmma     (const float*,const float*,float*,int,int,int);
 void launch_cublas    (const float*,const float*,float*,int,int,int); // cublasSgemm  (FP32, CUDA cores)
 void launch_cublas_tf32(const float*,const float*,float*,int,int,int);// cublasGemmEx (FP32 in, TF32 compute, Tensor Cores)
 void launch_cublas_tc (const float*,const float*,float*,int,int,int); // cublasGemmEx (FP16 in / FP32 acc, Tensor Cores)
+// hand-written mma.sync ablation ladder (gemm_mma.cu) — Phase 2 roadmap item
+void launch_mma_base    (const float*,const float*,float*,int,int,int);
+void launch_mma_swizzle (const float*,const float*,float*,int,int,int);
+void launch_mma_vec     (const float*,const float*,float*,int,int,int);
+void launch_mma_pipe    (const float*,const float*,float*,int,int,int);
+void launch_mma_warptile(const float*,const float*,float*,int,int,int);
 
 struct Kern{ const char* name; void(*fn)(const float*,const float*,float*,int,int,int); };
 
 int main(int argc,char**argv){
   int M=argc>1?atoi(argv[1]):4096, N=argc>2?atoi(argv[2]):4096, K=argc>3?atoi(argv[3]):4096;
   const char* out = argc>4?argv[4]:"results/bench.csv";
+  const char* filter = argc>5?argv[5]:nullptr;   // comma-separated kernel names, or all
   size_t szA=sizeof(float)*M*K, szB=sizeof(float)*K*N, szC=sizeof(float)*M*N;
   std::vector<float> hA(M*K),hB(K*N),hRef(M*N);
   fill_rand(hA.data(),M*K); fill_rand(hB.data(),K*N);
@@ -42,12 +53,23 @@ int main(int argc,char**argv){
   //   "cublas_tf32" = cublasGemmEx (FP32 in, TF32 compute, TC)   — TF32 Tensor Core rung
   //   "cublas_tc"   = cublasGemmEx (FP16 in / FP32 acc, TC)      — FP16 Tensor Core ceiling
   Kern kerns[]={{"naive",launch_naive},{"tiled",launch_tiled},{"wmma",launch_wmma},
+                {"mma_base",launch_mma_base},{"mma_swizzle",launch_mma_swizzle},
+                {"mma_vec",launch_mma_vec},{"mma_pipe",launch_mma_pipe},
+                {"mma_warptile",launch_mma_warptile},
                 {"cublas",launch_cublas},{"cublas_tf32",launch_cublas_tf32},{"cublas_tc",launch_cublas_tc}};
   struct Row{ const char* name; float ms, tf; double err; };
   std::vector<Row> rows;
   std::vector<float> hC(M*N);
   double cublas_tf=0;
+  // kernel filter: ",name," substring match against ",<filter>," so names can't
+  // partially match each other (e.g. "mma_pipe" vs "mma_pipe2")
+  auto selected=[&](const char* name){
+    if(!filter) return true;
+    std::string hay=std::string(",")+filter+",", needle=std::string(",")+name+",";
+    return hay.find(needle)!=std::string::npos;
+  };
   for(auto&k:kerns){
+    if(!selected(k.name)) continue;
     Timer t; k.fn(dA,dB,dC,M,N,K); CUDA_CHECK(cudaDeviceSynchronize());          // warmup
     t.start(); for(int i=0;i<10;i++) k.fn(dA,dB,dC,M,N,K); float ms=t.stop()/10.f;
     CUDA_CHECK(cudaMemcpy(hC.data(),dC,szC,cudaMemcpyDeviceToHost));
