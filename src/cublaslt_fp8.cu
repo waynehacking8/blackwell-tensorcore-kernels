@@ -51,35 +51,44 @@ void launch_cublaslt_fp8(const float* A, const float* B, float* C, int M, int N,
   //   X = Bt buffer seen as col-major [K x N], opX = T  -> X^T = [N x K]
   //   Y = A  buffer seen as col-major [K x M], opY = N
   // Both operands are K-major = the TN layout FP8 requires.
-  cublasLtMatmulDesc_t op;
-  cublasLtMatmulDescCreate(&op, CUBLAS_COMPUTE_32F, CUDA_R_32F);
-  cublasOperation_t ta = CUBLAS_OP_T, tb = CUBLAS_OP_N;
-  cublasLtMatmulDescSetAttribute(op, CUBLASLT_MATMUL_DESC_TRANSA, &ta, sizeof(ta));
-  cublasLtMatmulDescSetAttribute(op, CUBLASLT_MATMUL_DESC_TRANSB, &tb, sizeof(tb));
 
-  cublasLtMatrixLayout_t la, lb, lc;
-  cublasLtMatrixLayoutCreate(&la, CUDA_R_8F_E4M3, K, N, K);  // X: K x N col-major, ld=K
-  cublasLtMatrixLayoutCreate(&lb, CUDA_R_8F_E4M3, K, M, K);  // Y: K x M col-major, ld=K
-  cublasLtMatrixLayoutCreate(&lc, CUDA_R_32F, N, M, N);      // C^T: N x M col-major, ld=N
+  // Descriptors are cached per problem size to avoid per-call allocation overhead.
+  static cublasLtMatmulDesc_t s_op = nullptr;
+  static cublasLtMatrixLayout_t s_la = nullptr, s_lb = nullptr, s_lc = nullptr;
+  static cublasLtMatmulPreference_t s_pref = nullptr;
+  static int s_dM = 0, s_dN = 0, s_dK = 0;
+
+  if (M != s_dM || N != s_dN || K != s_dK) {
+    // Destroy stale descriptors before recreating.
+    if (s_pref) { cublasLtMatmulPreferenceDestroy(s_pref); s_pref = nullptr; }
+    if (s_lc)   { cublasLtMatrixLayoutDestroy(s_lc);        s_lc   = nullptr; }
+    if (s_lb)   { cublasLtMatrixLayoutDestroy(s_lb);        s_lb   = nullptr; }
+    if (s_la)   { cublasLtMatrixLayoutDestroy(s_la);        s_la   = nullptr; }
+    if (s_op)   { cublasLtMatmulDescDestroy(s_op);          s_op   = nullptr; }
+
+    cublasLtMatmulDescCreate(&s_op, CUBLAS_COMPUTE_32F, CUDA_R_32F);
+    cublasOperation_t ta = CUBLAS_OP_T, tb = CUBLAS_OP_N;
+    cublasLtMatmulDescSetAttribute(s_op, CUBLASLT_MATMUL_DESC_TRANSA, &ta, sizeof(ta));
+    cublasLtMatmulDescSetAttribute(s_op, CUBLASLT_MATMUL_DESC_TRANSB, &tb, sizeof(tb));
+
+    cublasLtMatrixLayoutCreate(&s_la, CUDA_R_8F_E4M3, K, N, K);  // X: K x N col-major, ld=K
+    cublasLtMatrixLayoutCreate(&s_lb, CUDA_R_8F_E4M3, K, M, K);  // Y: K x M col-major, ld=K
+    cublasLtMatrixLayoutCreate(&s_lc, CUDA_R_32F,     N, M, N);  // C^T: N x M col-major, ld=N
+
+    cublasLtMatmulPreferenceCreate(&s_pref);
+    cublasLtMatmulPreferenceSetAttribute(s_pref, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
+                                         &WS_SIZE, sizeof(WS_SIZE));
+    s_dM = M; s_dN = N; s_dK = K;
+  }
 
   float alpha = 1.f, beta = 0.f;
-  cublasLtMatmulPreference_t pref;
-  cublasLtMatmulPreferenceCreate(&pref);
-  cublasLtMatmulPreferenceSetAttribute(pref, CUBLASLT_MATMUL_PREF_MAX_WORKSPACE_BYTES,
-                                       &WS_SIZE, sizeof(WS_SIZE));
   cublasLtMatmulHeuristicResult_t heur;
   int found = 0;
-  cublasLtMatmulAlgoGetHeuristic(g_lt, op, la, lb, lc, lc, pref, 1, &heur, &found);
+  cublasLtMatmulAlgoGetHeuristic(g_lt, s_op, s_la, s_lb, s_lc, s_lc, s_pref, 1, &heur, &found);
 
-  cublasStatus_t st = cublasLtMatmul(g_lt, op, &alpha, g_Bt, la, g_A, lb, &beta,
-                                     C, lc, C, lc, found ? &heur.algo : nullptr,
+  cublasStatus_t st = cublasLtMatmul(g_lt, s_op, &alpha, g_Bt, s_la, g_A, s_lb, &beta,
+                                     C, s_lc, C, s_lc, found ? &heur.algo : nullptr,
                                      g_ws, WS_SIZE, 0);
   if (st != CUBLAS_STATUS_SUCCESS)
     fprintf(stderr, "cublasLtMatmul FP8 failed: %d (heuristics found=%d)\n", (int)st, found);
-
-  cublasLtMatmulPreferenceDestroy(pref);
-  cublasLtMatrixLayoutDestroy(la);
-  cublasLtMatrixLayoutDestroy(lb);
-  cublasLtMatrixLayoutDestroy(lc);
-  cublasLtMatmulDescDestroy(op);
 }

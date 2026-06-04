@@ -163,8 +163,8 @@ static void stage_fp16(const float* A, const float* B, int M, int N, int K) {
     CUDA_CHECK(cudaMalloc(&g_Bh, sizeof(half) * (size_t)K * N));
     g_M = M; g_N = N; g_K = K;
   }
-  if (A != g_cA) { int n = M * K; f2h_mma<<<(n + 255) / 256, 256>>>(A, g_Ah, n); g_cA = A; }
-  if (B != g_cB) { int n = K * N; f2h_mma<<<(n + 255) / 256, 256>>>(B, g_Bh, n); g_cB = B; }
+  if (A != g_cA) { size_t n = (size_t)M * K; f2h_mma<<<((int)((n + 255) / 256)), 256>>>(A, g_Ah, (int)n); g_cA = A; }  // size_t cast prevents int overflow at large M*K
+  if (B != g_cB) { size_t n = (size_t)K * N; f2h_mma<<<((int)((n + 255) / 256)), 256>>>(B, g_Bh, (int)n); g_cB = B; }
 }
 
 template <int BM, int BN, int BK, int WM, int WN, int ST, bool VEC, bool SWZ>

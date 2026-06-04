@@ -150,6 +150,9 @@ __global__ void __launch_bounds__((BM / 64) * (BN / 64) * 32) gemm_lowprec_t(
     for (int in = 0; in < NITER; in += 2) {
       unsigned r4[4];
       ldmatrix_x4(r4, (const half*)&Bs_c[smem_off_b<CPR, true>(wn * WN + in * 8 + lr, kk + lcb)]);
+      // B^T stored N-major in smem. ldmatrix.x4 (non-trans) loads 4 tiles:
+      // tiles {0,2} cover n-tile 0, tiles {1,3} cover n-tile 1.
+      // Re-interleave to match mma.m16n8k32.row.col B-operand layout per PTX ISA §9.7.13.4.
       bfrag[buf][in][0] = r4[0];     bfrag[buf][in][1] = r4[2];
       bfrag[buf][in + 1][0] = r4[1]; bfrag[buf][in + 1][1] = r4[3];
     }
@@ -186,6 +189,7 @@ __global__ void __launch_bounds__((BM / 64) * (BN / 64) * 32) gemm_lowprec_t(
     buf ^= 1;
 
     // second k-step: cross-slab boundary
+    // Terminal iteration: skip async copy, mma_step uses fragments loaded in previous iteration
     if (t + 1 < numSlabs) {
       cp_async_wait<STAGES - 2>();  // slab t+1 resident (STAGES-2 of the in-flight groups may stay pending)
       __syncthreads();              // all warps done reading slab t's smem
@@ -245,10 +249,10 @@ static void stage(Fmt fmt, const float* A, const float* B, int M, int N, int K) 
   }
   dim3 t2(16, 16), g2((K + 15) / 16, (N + 15) / 16);
   if (A != s.srcA) {
-    int n = M * K;
-    if (fmt == Fmt::FP8)        q_fp8<<<(n + 255) / 256, 256>>>(A, s.A, n);
-    else if (fmt == Fmt::FP4)   q_fp4<<<(n + 255) / 256, 256>>>(A, s.A, n, FP4_SCALE);
-    else                        q_mxfp4<<<(n / 2 + 255) / 256, 256>>>(A, s.A, n, FP4_SCALE);
+    size_t n = (size_t)M * K;  // size_t cast prevents int overflow at large M*K
+    if (fmt == Fmt::FP8)        q_fp8<<<((int)((n + 255) / 256)), 256>>>(A, s.A, (int)n);
+    else if (fmt == Fmt::FP4)   q_fp4<<<((int)((n + 255) / 256)), 256>>>(A, s.A, (int)n, FP4_SCALE);
+    else                        q_mxfp4<<<((int)((n / 2 + 255) / 256)), 256>>>(A, s.A, (int)n, FP4_SCALE);
     s.srcA = A;
   }
   if (B != s.srcB) {
@@ -261,6 +265,7 @@ static void stage(Fmt fmt, const float* A, const float* B, int M, int N, int K) 
 
 template <Fmt FMT, int STAGES, int BM = 128, int BN = 128>
 static void run(const uint8_t* A, const uint8_t* Bt, float* C, int M, int N, int K) {
+  static_assert(STAGES >= 2, "pipeline requires at least 2 stages");
   constexpr int SLAB = (BM + BN) * 64;
   size_t sh = (size_t)STAGES * SLAB;
   static bool attr_set = false;

@@ -113,7 +113,7 @@ void launch_cutlass_sm90(const float* A, const float* B, float* C, int M, int N,
         cutlass::gemm::GemmUniversalMode::kGemm,
         {M, N, K, 1},
         {Ah, stride_A, Bh, stride_B},
-        {{1.0f, 0.0f}, C, stride_C, C, stride_D}};
+        {{1.0f, 0.0f}, C, stride_C, C, stride_D}};  // C == D: benchmark reuses the same output buffer across calls.
     size_t ws_size = Gemm::get_workspace_size(args);
     if (ws_size) CUDA_CHECK(cudaMalloc(&workspace, ws_size));
     auto status = gemm->initialize(args, workspace);

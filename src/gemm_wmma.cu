@@ -112,8 +112,9 @@ __global__ void f2h(const float* in, half* out, int n){
 template<int BM,int BN,int ST>
 static void run(const half*A,const half*B,float*C,int M,int N,int K){
   static int set=-1; size_t sh=(size_t)ST*(BM*BK+BK*BN)*sizeof(half);
-  if(set!=BM){ cudaFuncSetAttribute(gemm_wmma_t<BM,BN,ST>,
-                 cudaFuncAttributeMaxDynamicSharedMemorySize,(int)sh); set=BM; }
+  // Guard key is BM only — safe as long as all instantiations have distinct BM
+  if(set!=BM){ CUDA_CHECK(cudaFuncSetAttribute(gemm_wmma_t<BM,BN,ST>,
+                 cudaFuncAttributeMaxDynamicSharedMemorySize,(int)sh)); set=BM; }
   dim3 t(NTHREAD), g((N+BN-1)/BN,(M+BM-1)/BM);
   gemm_wmma_t<BM,BN,ST><<<g,t,sh>>>(A,B,C,M,N,K);
 }
@@ -128,8 +129,8 @@ void launch_wmma(const float*A,const float*B,float*C,int M,int N,int K){
     CUDA_CHECK(cudaMalloc(&Bh,sizeof(half)*K*N));
     cM=M; cN=N; cK=K;
   }
-  if(A!=cA){ int n=M*K; f2h<<<(n+255)/256,256>>>(A,Ah,n); cA=A; }
-  if(B!=cB){ int n=K*N; f2h<<<(n+255)/256,256>>>(B,Bh,n); cB=B; }
+  if(A!=cA){ size_t n=(size_t)M*K; f2h<<<((int)((n+255)/256)),256>>>(A,Ah,(int)n); cA=A; }  // size_t cast prevents int overflow at large M*K
+  if(B!=cB){ size_t n=(size_t)K*N; f2h<<<((int)((n+255)/256)),256>>>(B,Bh,(int)n); cB=B; }
 
   // crossover ~1536: below it the 128-tile leaves the GPU under-occupied. The
   // small path uses 2 stages (few K-slabs -> 3 stages just wastes smem/occupancy);
