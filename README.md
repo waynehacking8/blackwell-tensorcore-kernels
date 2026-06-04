@@ -124,10 +124,10 @@ cuBLAS FP16-TC ceiling):
 
 | size | wmma | tf32-TC | cublas_tc (FP16-TC) | **wmma % of cuBLAS-TC** | tf32 % of cuBLAS-TC |
 |---|---|---|---|---|---|
-| 512  | 16.2 | 28.0  | 33.3  | 48.7% | 84.0% |
-| 1024 | 38.7 | 89.7  | 137.1 | 28.2% | 65.5% |
-| 2048 | 68.7 | 131.3 | 215.7 | 31.8% | 60.9% |
-| 4096 | 96.3 | 146.7 | 238.2 | 40.4% | 61.6% |
+| 512  | 16.2 | 28.0  | 33.7  | 48.2% | 83.1% |
+| 1024 | 38.7 | 89.7  | 133.8 | 29.0% | 67.0% |
+| 2048 | 68.6 | 128.8 | 213.6 | 32.1% | 60.3% |
+| 4096 | 96.1 | 144.4 | 235.1 | 40.9% | 61.4% |
 | 8192 | 100.2 | 150.5 | 225.75 | **44.4%** | 66.7% |
 
 Read the **% of cuBLAS-TC** column — the honest same-precision (FP16-in/FP32-acc, Tensor Core)
@@ -235,7 +235,7 @@ packed FP4** — and the Pareto chart shows the price: each 2× costs roughly a 
 of accuracy (max_abs_err 0.011 → 1.4 → 6.0 at K=8192). Three findings worth quoting
 (full analysis in [`results/phase3_lowprec.md`](results/phase3_lowprec.md)):
 
-> ¹ **The 4.11× is a throughput result.** The MXFP4 block-scale factors are fed as 1.0 (UE8M0 =
+> ¹ **The 4.13× is a throughput result.** The MXFP4 block-scale factors are fed as 1.0 (UE8M0 =
 > 127), i.e. per-tensor, not per-32-element-block, scaling — the hardware does identical work and
 > the OMMA.SF rate is real, but the numerics do not exercise real per-block MXFP4 scaling (for the
 > uniform test matrices per-block scales would be ≈ identical anyway; real-world activation
@@ -244,12 +244,12 @@ of accuracy (max_abs_err 0.011 → 1.4 → 6.0 at K=8192). Three findings worth 
 - **Unpacked FP4 is pointless.** `kind::f8f6f4` stores E2M1 in 8-bit containers and shares the
   QMMA pipeline → FP8 speed at 4× FP8's error. The 2×-over-FP8 exists only in the packed,
   block-scaled `kind::mxf4` path (OMMA.SF in SASS).
-- **Our FP8 is 91.0% of cuBLASLt FP8** (504 vs 554) — and cuBLASLt's kernel uses the *same* tile,
+- **Our FP8 is 90.8% of cuBLASLt FP8** (502 vs 552) — and cuBLASLt's kernel uses the *same* tile,
   warp layout and instruction as ours. Larger tiles and deeper pipelines measured as dead ends;
   the gap is xmma's instruction-level scheduling. Register-pipelined fragments (this kernel's
-  mainloop) buy 493 → 504; the last 9% needs finer interleaving.
-- **cuBLAS has no FP4 GEMM on sm_120** (no public ceiling exists) — the 993 TFLOP/s MXFP4 row
-  is this card's first-hand FP4 data point, at 56.4% of the measured FP4 peak (4× the directly
+  mainloop) buy 493 → 502; the last 9% needs finer interleaving.
+- **cuBLAS has no FP4 GEMM on sm_120** (no public ceiling exists) — the 988 TFLOP/s MXFP4 row
+  is this card's first-hand FP4 data point, at 56.1% of the measured FP4 peak (4× the directly
   measured FP16 peak — see the Phase 4 rate probe below; throughput data point only, see
   footnote ¹ on the per-tensor block-scale caveat).
 
@@ -315,7 +315,7 @@ its relative one. That is the actual lesson an SA needs when a partner asks "why
 kernel slow on the new GPUs?"
 
 > ### On the two cuBLAS baselines (read before quoting any "% of cuBLAS")
-> **% of FP32 cuBLAS** (e.g. 1125% @ 512, 185% @ 8192) compares **FP16-on-Tensor-Cores WMMA** against
+> **% of FP32 cuBLAS** (e.g. 194% @ 512, 185% @ 8192) compares **FP16-on-Tensor-Cores WMMA** against
 > **`cublasSgemm` FP32 on CUDA cores** — precision-mismatched, **not** a Tensor Core ceiling; a `>100%`
 > row reflects that mismatch (plus small-size launch overhead), not a kernel beating cuBLAS.
 > **% of cuBLAS-TC** compares against **`cublas_tc` (`cublasGemmEx`, FP16 in / FP32 accumulate)** in
@@ -418,7 +418,7 @@ the RTX PRO 6000** (per-clock ratio 1.000), unlike the consumer RTX 5090. The on
 wider accumulator is power — under the 300 W Max-Q cap the FP32-acc variant sustains ~3% lower
 clocks. This pins the peak denominators used throughout: **FP16 dense ≈ 440 TFLOP/s** at the
 sustained power-capped clock, FP8 ≈ 880, MXFP4 ≈ 1761 — so `mma_warptile` (243.2) = **55.2%**
-of peak, `mma_fp8` (503.7) = 57.2%, `mma_mxfp4` (992.6) = 56.4%, cuBLAS-TC (225.75) = 51.3%.
+of peak, `mma_fp8` (501.6) = 57.0%, `mma_mxfp4` (988.3) = 56.1%, cuBLAS-TC (225.75) = 51.3%.
 
 ## References
 - [NVIDIA CUTLASS](https://github.com/NVIDIA/cutlass) — the production reference for Tensor Core GEMM.

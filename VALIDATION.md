@@ -70,10 +70,10 @@ At M=N=K=8192 (the most timing-stable point):
 > **% of cuBLAS-TC** is the honest same-precision ceiling (vs `cublasGemmEx`, FP16 in / FP32
 > acc, Tensor Cores). **% of FP32 cuBLAS** is vs `cublasSgemm` (FP32, CUDA cores) and is
 > precision-mismatched (**†**): WMMA and cublas_tc run FP16 on Tensor Cores, so their `>100%`
-> rows there (e.g. wmma 1125% @ 512, cublas_tc 417% @ 8192) are **not** kernels beating cuBLAS —
+> rows there (e.g. wmma 194% @ 512, cublas_tc 417% @ 8192) are **not** kernels beating cuBLAS —
 > just FP16-TC vs FP32-CUDA-core. Against the same-precision cuBLAS-TC ceiling the optimized WMMA
 > kernel (size-dispatched: 64×64 for N<1536, 128×128 + 2×2 register tiling + 3-stage cp.async for
-> N≥1536) reaches **44.4% @ 8192** (40.4% @ 4096, 31.8% @ 2048; 28.2% @ 1024, 48.7% @ 512 on the
+> N≥1536) reaches **44.4% @ 8192** (40.9% @ 4096, 32.1% @ 2048; 29.0% @ 1024, 48.2% @ 512 on the
 > small-tile path) — see the naive→optimized→warp-spec progression in `results/nsys_profile.md`.
 
 - **WMMA against the honest same-precision ceiling.** Vs cuBLAS-TC (same FP16-in/FP32-acc
@@ -126,10 +126,10 @@ kernel:
 
 | size | wmma % of FP32 cuBLAS | **wmma % of cuBLAS-TC** | cublas_tc speedup vs FP32 |
 |---|---|---|---|
-| 512  | 1125% | 48.7% | 23.2× |
-| 1024 | 377%  | 28.2% | 13.3× |
-| 2048 | 193%  | 31.8% | 6.1× |
-| 4096 | 202%  | 40.4% | 5.0× |
+| 512  | 194%  | 48.2% | 4.0× |
+| 1024 | 99%   | 29.0% | 3.4× |
+| 2048 | 130%  | 32.1% | 4.1× |
+| 4096 | 171%  | 40.9% | 4.2× |
 | 8192 | 185%  | **44.4%** | 4.2× |
 
 > All derived percentages in this document are computed from the committed `results/bench.csv`
@@ -174,17 +174,17 @@ peak. GB202's FP16→FP32-acc dense peak is **measured directly** by the Phase 4
 
 ## Phase 3 FP8/FP4 kernels — throughput ratios vs hardware spec
 
-The Phase 3 kernels (`src/gemm_mma_fp8.cu`, sm_120a build) claim **2.09× (FP8)** and
-**4.11× (MXFP4)** over the FP16 kernel. Cross-checks:
+The Phase 3 kernels (`src/gemm_mma_fp8.cu`, sm_120a build) claim **2.10× (FP8)** and
+**4.13× (MXFP4)** over the FP16 kernel. Cross-checks:
 
 | check | evidence | verdict |
 |---|---|---|
-| FP8 ratio vs spec | 5th-gen TC spec: FP8 = 2× FP16. Measured: 503.7 / 241.5 = **2.09×** | ✓ |
-| FP4 ratio vs spec | packed FP4 = 4× FP16. Measured: 992.6 / 241.5 = **4.11×** | ✓ |
+| FP8 ratio vs spec | 5th-gen TC spec: FP8 = 2× FP16. Measured: 501.6 / 239.2 = **2.10×** | ✓ |
+| FP4 ratio vs spec | packed FP4 = 4× FP16. Measured: 988.3 / 239.2 = **4.13×** | ✓ |
 | Constant fraction of peak | ours = 55–57% of the **measured** full-rate peak at FP16, FP8 and FP4 (440.3 TFLOP/s × format multiplier); cuBLAS-TC = 52%, cuBLASLt FP8 = 63% — no precision is anomalous | ✓ |
 | FP8 math correctness | max_abs_err = 1.4 bit-identical to cuBLASLt FP8 (same E4M3 quantized inputs, same K) | ✓ |
 | FP4 math correctness | `mma_fp4` (QMMA, unpacked) and `mma_mxfp4` (OMMA.SF, packed + block-scale) agree exactly (max_abs_err 5.97) through two different instruction paths | ✓ |
-| Library baseline | cuBLASLt FP8 (E4M3, TN layout) = 553.5 TFLOP/s; ours = 91.0% of it — reported as-is, not hidden | ✓ |
+| Library baseline | cuBLASLt FP8 (E4M3, TN layout) = 552.4 TFLOP/s; ours = 90.8% of it — reported as-is, not hidden | ✓ |
 | Error scaling | max_abs_err 0.011 (FP16) → 1.4 (FP8) → 6.0 (FP4) tracks 2^-10 / 2^-3 / 2^-1 mantissa widths at K=8192 | ✓ |
 | Session continuity | same-session FP16 rows reproduce committed values within −0.8% / −1.0% (clock-cap variance) | ✓ |
 
@@ -211,8 +211,8 @@ it at **half** rate, and no public spec exists for the RTX PRO 6000. The Phase 4
 | Power-cap effect isolated | FP32-acc draws more power → sustained clock ~3.1% lower (426.7 vs 440.3 TFLOP/s); per-clock identical | ✓ |
 
 **Consequences for the numbers above:** peak = **440.3 TFLOP/s** (FP16/FP32-acc dense, 300 W
-sustained). `mma_warptile` = 55.2% of peak, cuBLAS-TC = 51.3%, `mma_fp8` = 57.2% of 2× peak,
-`mma_mxfp4` = 56.4% of 4× peak. The previous "~440 if full-rate" inference is replaced by direct
+sustained). `mma_warptile` = 55.2% of peak, cuBLAS-TC = 51.3%, `mma_fp8` = 57.0% of 2× peak,
+`mma_mxfp4` = 56.1% of 4× peak. The previous "~440 if full-rate" inference is replaced by direct
 measurement.
 
 ## H100 (sm_90) cross-check — does any of this transfer?
