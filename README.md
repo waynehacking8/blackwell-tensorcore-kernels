@@ -124,11 +124,11 @@ cuBLAS FP16-TC ceiling):
 
 | size | wmma | tf32-TC | cublas_tc (FP16-TC) | **wmma % of cuBLAS-TC** | tf32 % of cuBLAS-TC |
 |---|---|---|---|---|---|
-| 512  | 16.2 | 28.0  | 33.7  | 48.2% | 83.1% |
-| 1024 | 38.7 | 89.7  | 133.8 | 29.0% | 67.0% |
+| 512  | 16.2 | 27.8  | 33.7  | 48.2% | 82.6% |
+| 1024 | 38.7 | 90.7  | 133.8 | 29.0% | 67.8% |
 | 2048 | 68.6 | 128.8 | 213.6 | 32.1% | 60.3% |
 | 4096 | 96.1 | 144.4 | 235.1 | 40.9% | 61.4% |
-| 8192 | 100.2 | 150.5 | 225.75 | **44.4%** | 66.7% |
+| 8192 | 100.2 | 150.5 | 225.8 | **44.4%** | 66.7% |
 
 Read the **% of cuBLAS-TC** column — the honest same-precision (FP16-in/FP32-acc, Tensor Core)
 ceiling. Across two optimization passes (shared-mem + cp.async, then register tiling + deeper
