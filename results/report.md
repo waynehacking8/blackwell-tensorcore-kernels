@@ -37,21 +37,21 @@ At M=N=K=8192:
 
 | kernel | TFLOP/s | % of FP32 cuBLAS | % of cuBLAS-TC | max abs err |
 |---|---|---|---|---|
-| naive | 4.8 | 8.7% | 2.1% | 0 |
-| tiled | 7.3 | 13.3% | 3.2% | 0 |
-| wmma | 103.5 | 188.7% | 45.2% | 0.0112 |
-| mma_base | 47.4 | 86.3% | 20.7% | 0.0112 |
-| mma_swizzle | 58.6 | 106.9% | 25.6% | 0.0112 |
-| mma_vec | 165.3 | 301.3% | 72.1% | 0.0112 |
-| mma_pipe | 178.0 | 324.5% | 77.7% | 0.0112 |
-| mma_warptile | 243.2 | 443.3% | 106.1% | 0.0112 |
-| mma_fp8 | 503.7 | 0.0% | 219.8% | 1.4 |
-| mma_fp4 | 520.5 | 0.0% | 227.1% | 5.97 |
-| mma_mxfp4 | 992.6 | 0.0% | 433.1% | 5.97 |
-| cublas | 54.8 | 100.0% | 23.9% | 0 |
-| cublas_tf32 | 152.7 | 278.4% | 66.6% | 0.0113 |
-| cublas_tc | 229.2 | 417.9% | 100.0% | 0.0112 |
-| cublaslt_fp8 | 553.5 | 0.0% | 241.5% | 1.4 |
+| naive | 4.6 | 8.6% | 2.1% | 0 |
+| tiled | 7.0 | 12.9% | 3.1% | 0 |
+| wmma | 100.2 | 185.0% | 44.4% | 0.0112 |
+| mma_base | 47.4 | 87.4% | 21.0% | 0.0112 |
+| mma_swizzle | 58.3 | 107.6% | 25.8% | 0.0112 |
+| mma_vec | 163.0 | 300.9% | 72.2% | 0.0112 |
+| mma_pipe | 175.4 | 323.9% | 77.7% | 0.0112 |
+| mma_warptile | 238.5 | 440.3% | 105.6% | 0.0112 |
+| mma_fp8 | 502.0 | 926.8% | 222.4% | 1.4 |
+| mma_fp4 | 517.6 | 955.6% | 229.3% | 5.97 |
+| mma_mxfp4 | 966.7 | 1784.7% | 428.2% | 5.97 |
+| cublas | 54.2 | 100.0% | 24.0% | 0 |
+| cublas_tf32 | 150.5 | 277.9% | 66.7% | 0.0113 |
+| cublas_tc | 225.8 | 416.8% | 100.0% | 0.0112 |
+| cublaslt_fp8 | 552.0 | 1019.1% | 244.5% | 1.4 |
 
 > Precision ladder, all on the **same card**: **cublas** = `cublasSgemm` (FP32, CUDA cores); **cublas_tf32** = `cublasGemmEx` (FP32 in, TF32 compute, Tensor Cores); **cublas_tc** = `cublasGemmEx` (FP16 in / FP32 acc, Tensor Cores) — the honest same-precision ceiling for `wmma`. **% of FP32 cuBLAS** is precision-mismatched (FP16/TF32-TC vs FP32-CUDA-core), so its `>100%` rows are **not** a kernel beating cuBLAS. Quote **% of cuBLAS-TC**.
 
