@@ -221,16 +221,16 @@ only); these are the precisions reachable through the plain `mma` path:
 
 | kernel | format / instruction | TFLOP/s @ 8192³ | vs FP16 | max_abs_err |
 |---|---|---|---|---|
-| `mma_warptile` | FP16 · `m16n8k16` (HMMA) | 241.5 | 1.00× | 0.0112 |
-| `mma_fp8` | FP8 E4M3 · `m16n8k32` (QMMA) | 503.7 | **2.09×** | 1.4 |
-| `mma_fp4` | FP4-in-8bit · `kind::f8f6f4` (QMMA) | 520.5 | 2.16× | 5.97 |
-| **`mma_mxfp4`** ¹ | **packed FP4 + block scale · `kind::mxf4` (OMMA.SF)** | **992.6** | **4.11×** | 5.97 |
-| `cublas_tc` | FP16 (cuBLAS) | 226.9 | — | 0.0112 |
-| `cublaslt_fp8` | FP8 E4M3 (cuBLASLt) | 553.5 | 2.29× | 1.4 |
+| `mma_warptile` | FP16 · `m16n8k16` (HMMA) | 239.2 | 1.00× | 0.0112 |
+| `mma_fp8` | FP8 E4M3 · `m16n8k32` (QMMA) | 501.6 | **2.10×** | 1.4 |
+| `mma_fp4` | FP4-in-8bit · `kind::f8f6f4` (QMMA) | 517.8 | 2.16× | 5.97 |
+| **`mma_mxfp4`** ¹ | **packed FP4 + block scale · `kind::mxf4` (OMMA.SF)** | **988.3** | **4.13×** | 5.97 |
+| `cublas_tc` | FP16 (cuBLAS) | 225.3 | — | 0.0112 |
+| `cublaslt_fp8` | FP8 E4M3 (cuBLASLt) | 552.4 | 2.31× | 1.4 |
 
 ![precision Pareto](results/precision_pareto_sm120.png)
 
-The ladder delivers the 5th-gen Tensor Core spec almost exactly — **2.09× for FP8, 4.11× for
+The ladder delivers the 5th-gen Tensor Core spec almost exactly — **2.10× for FP8, 4.13× for
 packed FP4** — and the Pareto chart shows the price: each 2× costs roughly a decimal digit
 of accuracy (max_abs_err 0.011 → 1.4 → 6.0 at K=8192). Three findings worth quoting
 (full analysis in [`results/phase3_lowprec.md`](results/phase3_lowprec.md)):

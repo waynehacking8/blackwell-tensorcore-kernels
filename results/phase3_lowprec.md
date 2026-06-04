@@ -10,34 +10,34 @@ block-scaled packed FP4 (SASS verified). Build target `sm_120a` (the FP4 kinds r
 
 | kernel | format | instruction | TFLOP/s | vs FP16 | max_abs_err |
 |---|---|---|---|---|---|
-| `mma_warptile` | FP16 | `mma.m16n8k16` (HMMA) | 241.5 | 1.00× | 0.0112 |
-| `mma_fp8` | FP8 E4M3 | `mma.m16n8k32` (QMMA) | 503.7 | **2.09×** | 1.4 |
-| `mma_fp4` | FP4 E2M1, 8-bit containers | `mma.m16n8k32.kind::f8f6f4` (QMMA) | 520.5 | 2.16× | 5.97 |
-| `mma_mxfp4` | FP4 E2M1, packed + block scale | `mma.m16n8k64.kind::mxf4` (OMMA.SF) | **992.6** | **4.11×** | 5.97 |
-| `cublas_tc` | FP16 | cuBLAS (cutlass_80) | 227.1 | 0.94× | 0.0112 |
-| `cublaslt_fp8` | FP8 E4M3 | cuBLASLt | 553.5 | 2.29× | 1.4 |
+| `mma_warptile` | FP16 | `mma.m16n8k16` (HMMA) | 239.2 | 1.00× | 0.0112 |
+| `mma_fp8` | FP8 E4M3 | `mma.m16n8k32` (QMMA) | 501.6 | **2.10×** | 1.4 |
+| `mma_fp4` | FP4 E2M1, 8-bit containers | `mma.m16n8k32.kind::f8f6f4` (QMMA) | 517.8 | 2.16× | 5.97 |
+| `mma_mxfp4` | FP4 E2M1, packed + block scale | `mma.m16n8k64.kind::mxf4` (OMMA.SF) | **988.3** | **4.13×** | 5.97 |
+| `cublas_tc` | FP16 | cuBLAS (cutlass_80) | 225.3 | 0.94× | 0.0112 |
+| `cublaslt_fp8` | FP8 E4M3 | cuBLASLt | 552.4 | 2.31× | 1.4 |
 
 Chart: `precision_pareto_sm120.png`. Session CSV: `bench_phase3_session.csv`.
 Clock/power: 300 W Max-Q cap reached, avg SM clock 2.06 GHz (`clock_state_phase3_session.txt`).
 
 ## What the ladder shows
 
-1. **FP8 delivers the spec'd 2×.** 503.7 vs 241.5 TFLOP/s = 2.09×. The kernel is the Phase 2
+1. **FP8 delivers the spec'd 2×.** 501.6 vs 239.2 TFLOP/s = 2.10×. The kernel is the Phase 2
    winner with the instruction swapped (`m16n8k16` FP16 → `m16n8k32` FP8), the operand path
    narrowed to 1 byte/element, and a register-pipelined mainloop (fragments for k-step i+1
    load while the mma for k-step i runs).
-2. **FP4 without packing buys ~nothing over FP8** (520 vs 504 = +3%, same error class).
+2. **FP4 without packing buys ~nothing over FP8** (518 vs 502 = +3%, same error class).
    `kind::f8f6f4` stores E2M1 values in 8-bit containers → same QMMA pipeline rate, same memory
    traffic as FP8. Accuracy drops from FP8's max_abs_err 1.4 to 5.97 for ~nothing in return.
 3. **The 4× lives in the packed, block-scaled path.** MXFP4 (`kind::mxf4`) packs 2 values/byte
-   and runs the OMMA.SF pipeline: 992.6 TFLOP/s = 4.11× FP16, 1.97× FP8 — at the *same*
+   and runs the OMMA.SF pipeline: 988.3 TFLOP/s = 4.13× FP16, 1.97× FP8 — at the *same*
    accuracy as unpacked FP4.
 4. **The accuracy axis is the price.** FP16 0.0112 → FP8 1.4 → FP4 5.97 max_abs_err
    (vs FP32 cuBLAS reference at K=8192). FP8 ≈ 2 decimal digits; FP4 ≈ 1.
 
 ## Honest comparisons
 
-- **Our FP8 = 91.0% of cuBLASLt FP8** (503.7 vs 553.5). cuBLASLt dispatches
+- **Our FP8 = 90.8% of cuBLASLt FP8** (501.6 vs 552.4). cuBLASLt dispatches
   `sm89_xmma_gemm_e4m3..._tilesize128x128x64_stage3_warpsize2x2x1_tensor16x8x32` — the *same*
   CTA tile, warp layout and instruction as ours. The tuning ladder measured here: larger CTA
   tiles LOSE (256×128 → 470, 128×256 → 463, 256×256 → 123 — occupancy, then spills),
@@ -58,7 +58,7 @@ Clock/power: 300 W Max-Q cap reached, avg SM clock 2.06 GHz (`clock_state_phase3
 |---|---|---|
 | FP8 math correct | max_abs_err 1.4 identical to cuBLASLt FP8 (same quantized inputs, same K) | ✓ |
 | FP4 math correct | mma_fp4 (QMMA) and mma_mxfp4 (OMMA.SF) produce identical max_abs_err (5.97) through two different instructions | ✓ |
-| Throughput plausibility | 2.09× / 4.11× vs FP16 = hardware spec 2× and ~4×; ours stays 55–57% of the measured peak at all precisions (cuBLAS-TC: 52%; cuBLASLt FP8: 63%) — peak measured directly by the Phase 4 rate probe (`mma_rate_probe.csv`: full-rate FP32-acc, 440.3 TFLOP/s × format multiplier) | ✓ |
+| Throughput plausibility | 2.10× / 4.13× vs FP16 = hardware spec 2× and ~4×; ours stays 54–57% of the measured peak at all precisions (cuBLAS-TC: 51%; cuBLASLt FP8: 63%) — peak measured directly by the Phase 4 rate probe (`mma_rate_probe.csv`: full-rate FP32-acc, 440.3 TFLOP/s × format multiplier) | ✓ |
 | Bit alignment of `kind::f8f6f4` | bug caught & fixed: E2M1 in bits [5:2], not [3:0] — wrong packing gave max_abs_err 82.6 (~20×) | ✓ documented |
 | Baseline continuity | same-session FP16 rows reproduce committed values within −0.8% (mma_warptile) / −1.0% (cublas_tc) | ✓ |
 | Clock state | 300 W Max-Q cap reached during sweep; avg SM clock 2.06 GHz | recorded |
