@@ -128,11 +128,11 @@ cuBLAS FP16-TC ceiling):
 | 1024 | 38.7 | 89.7  | 137.1 | 28.2% | 65.5% |
 | 2048 | 68.7 | 131.3 | 215.7 | 31.8% | 60.9% |
 | 4096 | 96.3 | 146.7 | 238.2 | 40.4% | 61.6% |
-| 8192 | 103.5 | 152.7 | 229.2 | **45.2%** | 66.6% |
+| 8192 | 100.2 | 150.5 | 225.75 | **44.4%** | 66.7% |
 
 Read the **% of cuBLAS-TC** column — the honest same-precision (FP16-in/FP32-acc, Tensor Core)
 ceiling. Across two optimization passes (shared-mem + cp.async, then register tiling + deeper
-pipeline + size dispatch) the WMMA kernel went from a naive **17.3%** to **45.2%** of cuBLAS-TC
+pipeline + size dispatch) the WMMA kernel went from a naive **17.3%** to **44.4%** of cuBLAS-TC
 at 8192 (1.64× the single-buffer version), and no longer decays at scale. Pipeline depth is
 tuned (3 stages > 4 > 5) and **warp specialization was tried but did not beat the multi-stage
 pipeline** — the expected outcome per CudaDMA (Bauer et al., SC'11), since warp specialization
@@ -266,14 +266,14 @@ The same source, built with `ARCH=90`, run on one idle GPU of an 8×H100 box
 |---|---|---|---|---|
 | 2048 | 56.6 | 555.0 | 10.2% | 31.8% |
 | 4096 | 59.4 | 732.6 | 8.1% | 40.4% |
-| 8192 | 60.9 | 761.7 | **8.0%** | **45.2%** |
+| 8192 | 60.9 | 761.7 | **8.0%** | **44.4%** |
 
 Two things happened at once, and `nsys`/`ncu` separate them cleanly
 (see `results/nsys_profile.md` for the full profiles):
 
 1. **The ceiling moved.** On H100, `cublas_tc` dispatches **`nvjet_sm90_hss_320x128`** — a
    Hopper-native warpgroup (`wgmma`) kernel that reaches **762 TFLOP/s ≈ 77% of H100's 989
-   TFLOP/s FP16 dense peak**. On the RTX Pro 6000, cuBLAS-TC tops out at 229 TFLOP/s (an
+   TFLOP/s FP16 dense peak**. On the RTX Pro 6000, cuBLAS-TC tops out at 226 TFLOP/s (an
    sm_80-style `cutlass_80_tensorop` kernel). The H100 ceiling is **3.3× higher** in absolute
    terms.
 2. **Our kernel cannot follow it — for two stacked reasons.** (a) *Architectural*: the WMMA
@@ -305,7 +305,7 @@ occupancy, low utilization.
 
 **What transfers across generations and what doesn't:** the optimization *story* (tiling,
 `cp.async` pipelining, register tiling) transfers — the kernel's absolute TFLOP/s scales only
-with SM count × clock (103 vs 61 TFLOP/s; the spec SM×clock ratio is 1.88×, measured 1.70× —
+with SM count × clock (100 vs 61 TFLOP/s; the spec SM×clock ratio is 1.88×, measured 1.70× —
 the Max-Q power limit accounts for the difference). What does **not** transfer is the
 *fraction of the ceiling*:
 each architecture generation moves the ceiling behind a new instruction (Volta `mma.sync` →
@@ -315,12 +315,12 @@ its relative one. That is the actual lesson an SA needs when a partner asks "why
 kernel slow on the new GPUs?"
 
 > ### On the two cuBLAS baselines (read before quoting any "% of cuBLAS")
-> **% of FP32 cuBLAS** (e.g. 1125% @ 512, 189% @ 8192) compares **FP16-on-Tensor-Cores WMMA** against
+> **% of FP32 cuBLAS** (e.g. 1125% @ 512, 185% @ 8192) compares **FP16-on-Tensor-Cores WMMA** against
 > **`cublasSgemm` FP32 on CUDA cores** — precision-mismatched, **not** a Tensor Core ceiling; a `>100%`
 > row reflects that mismatch (plus small-size launch overhead), not a kernel beating cuBLAS.
 > **% of cuBLAS-TC** compares against **`cublas_tc` (`cublasGemmEx`, FP16 in / FP32 accumulate)** in
 > `src/cublas_tc.cu` — same precision, same timing methodology (FP16 cast staged once outside the timed
-> loop; cuBLAS handle created once). Against this honest ceiling the optimized WMMA lands at ~45% at
+> loop; cuBLAS handle created once). Against this honest ceiling the optimized WMMA lands at ~44% at
 > large sizes. **The remaining gap is *not* TMA or warp specialization** — nsys shows cuBLAS
 > dispatches `cutlass_80_tensorop_s16816gemm_f16_128x64`, an **Ampere-generation (sm_80) kernel**
 > that uses `cp.async` multistage pipelining, *not* TMA and *not* warp specialization (both are
@@ -418,7 +418,7 @@ the RTX PRO 6000** (per-clock ratio 1.000), unlike the consumer RTX 5090. The on
 wider accumulator is power — under the 300 W Max-Q cap the FP32-acc variant sustains ~3% lower
 clocks. This pins the peak denominators used throughout: **FP16 dense ≈ 440 TFLOP/s** at the
 sustained power-capped clock, FP8 ≈ 880, MXFP4 ≈ 1761 — so `mma_warptile` (243.2) = **55.2%**
-of peak, `mma_fp8` (503.7) = 57.2%, `mma_mxfp4` (992.6) = 56.4%, cuBLAS-TC (229.2) = 52.1%.
+of peak, `mma_fp8` (503.7) = 57.2%, `mma_mxfp4` (992.6) = 56.4%, cuBLAS-TC (225.75) = 51.3%.
 
 ## References
 - [NVIDIA CUTLASS](https://github.com/NVIDIA/cutlass) — the production reference for Tensor Core GEMM.

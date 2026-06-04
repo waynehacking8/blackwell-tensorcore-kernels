@@ -8,14 +8,14 @@ Workstation Edition** (`sm_120`, 300 W Max-Q), CUDA 12.8, FP32 inputs, cuBLAS as
 
 - **Spec:** RTX PRO 6000 Blackwell **FP32 = 125 TFLOPS** dense (non-tensor), @ **600 W**
   (nvidia.com / flopper.io).
-- **Measured:** cuBLAS `cublasSgemm` peaks at **~54.7 TFLOP/s** at M=N=K=8192.
+- **Measured:** cuBLAS `cublasSgemm` peaks at **~54.2 TFLOP/s** at M=N=K=8192.
 - **Reconciliation:** this board is the **Max-Q (300 W)** variant — roughly half the
-  power budget of the 600 W spec part. ~54.7 / 125 ≈ **44%**, i.e. about half the
+  power budget of the 600 W spec part. ~54.2 / 125 ≈ **43%**, i.e. about half the
   rated FP32 throughput, consistent with a halved power/clock envelope. ✓ Reasonable.
 
 ## Clock state — why absolute TFLOP/s sit below the hardware peak
 
-The absolute numbers here (cuBLAS-TC ~228, our WMMA ~103 TFLOP/s) are **well below** the
+The absolute numbers here (cuBLAS-TC ~226, our WMMA ~100 TFLOP/s) are **well below** the
 Blackwell FP16/FP32-acc hardware peak — directly measured at **440.3 TFLOP/s dense** on this
 card at the sustained power-capped clock (Phase 4 rate probe, below; the ≳1 PFLOP/s marketing
 figure is with 2:4 sparsity at boost clocks). We verified this is **clock governance, not a
@@ -53,13 +53,13 @@ At M=N=K=8192 (the most timing-stable point):
 |---|---|---|---|---|---|
 | naive | 4.8 | 8.7% | 2.1% | 0 | one-thread-per-output, no reuse — expected floor |
 | tiled | 7.3 | 13.3% | 3.2% | 0 | shared-mem + register block, ~1.5× naive |
-| **wmma** | 103.5 | 189% † | **45.2%** | 0.011 | 128×128 reg-tiled + 3-stage cp.async, FP16-in/FP32-acc TC |
-| cublas | 54.8 | 100% | 23.9% | 0 | FP32 baseline (cublasSgemm, CUDA cores) |
-| cublas_tf32 | 152.7 | 278% † | 66.6% | 0.0113 | TF32 Tensor Core rung (cublasGemmEx, FP32 in / TF32 compute) |
-| **cublas_tc** | 229.2 | 418% † | **100%** | 0.011 | FP16/FP32-acc Tensor Core ceiling (cublasGemmEx) |
+| **wmma** | 100.2 | 185% † | **44.4%** | 0.011 | 128×128 reg-tiled + 3-stage cp.async, FP16-in/FP32-acc TC |
+| cublas | 54.16 | 100% | 24.0% | 0 | FP32 baseline (cublasSgemm, CUDA cores) |
+| cublas_tf32 | 150.5 | 278% † | 66.7% | 0.0113 | TF32 Tensor Core rung (cublasGemmEx, FP32 in / TF32 compute) |
+| **cublas_tc** | 225.75 | 417% † | **100%** | 0.011 | FP16/FP32-acc Tensor Core ceiling (cublasGemmEx) |
 
 > **Precision-ladder sanity (FP32→TF32→FP16, all same card):** throughput is strictly
-> monotone at every size — FP32 54.8 < TF32 152.7 < FP16 229.2 TFLOP/s @8192 — and the
+> monotone at every size — FP32 54.16 < TF32 150.5 < FP16 225.75 TFLOP/s @8192 — and the
 > intermediate TF32 rung lands cleanly between the CUDA-core baseline and the FP16 ceiling,
 > exactly as the hardware predicts. **Notable (verified) detail:** TF32 and FP16 have the
 > *same* max-abs-err (~0.011) **and** the same mean-abs-err (0.001111 vs 0.001111 @4096) — not
@@ -70,20 +70,20 @@ At M=N=K=8192 (the most timing-stable point):
 > **% of cuBLAS-TC** is the honest same-precision ceiling (vs `cublasGemmEx`, FP16 in / FP32
 > acc, Tensor Cores). **% of FP32 cuBLAS** is vs `cublasSgemm` (FP32, CUDA cores) and is
 > precision-mismatched (**†**): WMMA and cublas_tc run FP16 on Tensor Cores, so their `>100%`
-> rows there (e.g. wmma 1125% @ 512, cublas_tc 418% @ 8192) are **not** kernels beating cuBLAS —
+> rows there (e.g. wmma 1125% @ 512, cublas_tc 417% @ 8192) are **not** kernels beating cuBLAS —
 > just FP16-TC vs FP32-CUDA-core. Against the same-precision cuBLAS-TC ceiling the optimized WMMA
 > kernel (size-dispatched: 64×64 for N<1536, 128×128 + 2×2 register tiling + 3-stage cp.async for
-> N≥1536) reaches **45.2% @ 8192** (40.4% @ 4096, 31.8% @ 2048; 28.2% @ 1024, 48.7% @ 512 on the
+> N≥1536) reaches **44.4% @ 8192** (40.4% @ 4096, 31.8% @ 2048; 28.2% @ 1024, 48.7% @ 512 on the
 > small-tile path) — see the naive→optimized→warp-spec progression in `results/nsys_profile.md`.
 
 - **WMMA against the honest same-precision ceiling.** Vs cuBLAS-TC (same FP16-in/FP32-acc
-  Tensor Core path), the optimized WMMA kernel reaches **45.2% @ 8192**. Three stages of work
+  Tensor Core path), the optimized WMMA kernel reaches **44.4% @ 8192**. Three stages of work
   got it there from the naive **17.3%**: (1) shared-mem tiling + cp.async double-buffering fixed
   the naive memory-bound decay (47→63 TFLOP/s); (2) a 128×128 tile with per-warp 2×2 register
-  tiling + 3-stage pipeline raised reuse (→103 TFLOP/s, 1.64×); (3) size dispatch keeps the
+  tiling + 3-stage pipeline raised reuse (→100 TFLOP/s, 1.64×); (3) size dispatch keeps the
   64×64 tile for N<1536 so small matrices don't lose occupancy. Pipeline depth is tuned by
-  measurement (3 stages 103 > 4 stages 95 > 5 stages 88 TFLOP/s @ 8192). **Warp specialization
-  was implemented and benchmarked but did *not* beat the multi-stage pipeline** (95.4 vs 103.2 @
+  measurement (3 stages 100 > 4 stages 95 > 5 stages 88 TFLOP/s @ 8192). **Warp specialization
+  was implemented and benchmarked but did *not* beat the multi-stage pipeline** (95.4 vs 100.2 @
   8192) — at this 512-thread tile the cp.async pipeline already saturates latency-hiding, so
   dedicating warps to production costs more mma throughput than it saves. This is the **expected
   outcome per CudaDMA (Bauer et al., SC'11)**: warp specialization only pays off when combined
@@ -98,8 +98,8 @@ At M=N=K=8192 (the most timing-stable point):
   swizzle/rasterization, and more aggressive multistage cp.async pipelining — exactly the
   ingredients Boehm's published ablation rides to ~94% of cuBLAS without TMA or warp spec.
   The "% of FP32 cuBLAS" figure remains precision-mismatched and is kept only for continuity.
-- **cuBLAS-TC confirms the Tensor Core path.** cublas_tc reaches 229 TFLOP/s @ 8192 — **4.2×**
-  the FP32 cublasSgemm (54.8) and up to **23×** at 512 — which is only possible on the Tensor
+- **cuBLAS-TC confirms the Tensor Core path.** cublas_tc reaches 226 TFLOP/s @ 8192 — **4.2×**
+  the FP32 cublasSgemm (54.16) and up to **23×** at 512 — which is only possible on the Tensor
   Core path, so the baseline is doing what it claims.
 - **Observed-but-not-overclaimed:** on this Blackwell (sm_120) card, cuBLAS *chose* an sm_80-style
   CUTLASS kernel (`cutlass_80_tensorop_s16816gemm_f16_128x64`) for this problem size — an
@@ -130,13 +130,13 @@ kernel:
 | 1024 | 377%  | 28.2% | 13.3× |
 | 2048 | 193%  | 31.8% | 6.1× |
 | 4096 | 202%  | 40.4% | 5.0× |
-| 8192 | 189%  | **45.2%** | 4.2× |
+| 8192 | 185%  | **44.4%** | 4.2× |
 
 > All derived percentages in this document are computed from the committed `results/bench.csv`
 > (the single source of truth). cuBLAS absolutes vary a few percent run-to-run under the clock
 > governance described above, so percentages quoted from earlier runs may differ slightly.
 
-The WMMA kernel reaches **45% @ 8192** against the same-precision Tensor Core ceiling (naive was
+The WMMA kernel reaches **44% @ 8192** against the same-precision Tensor Core ceiling (naive was
 17–22% and decayed at 8192; shared-mem+cp.async, then register tiling + deeper pipeline + size
 dispatch closed most of the gap; warp specialization was tried and rejected — see
 `results/nsys_profile.md`). No size exceeds 100% of cuBLAS-TC **for the WMMA kernel** (the Phase 2
@@ -163,14 +163,14 @@ The Phase 2 hand-written `mma.sync` kernel (`mma_warptile`, `src/gemm_mma.cu`) m
 | GPU-timeline (not harness) | nsys per-instance durations: ours 4.52 ms vs `cutlass_80_tensorop_s16816gemm_f16_128x64_64x3` 4.79 ms (`results/nsys_kern_sum_mma_8192.txt`) | ✓ |
 | Same instruction class | cuBLAS kernel name contains `s16816` = `mma.sync.m16n8k16`, the same instruction ours uses — a tiling/scheduling contest, not an instruction-set advantage | ✓ |
 | Stall-level mechanism (ncu) | `ncu --set full` side-by-side (`results/ncu_sm120_*_8192.txt`): ours runs Tensor pipe at 85.0% vs cuBLAS 74.0%; both stall only on fixed-latency math dependencies (2.9 vs 4.0 cyc/warp); the WMMA kernel's MIO-queue-full stall (34.2%) is eliminated | ✓ |
-| Baseline continuity | session re-measured `wmma` 103.1 (committed: 103.5) and `cublas_tc` 229.0 (committed: 229.2) — same clock regime as Phase 1 | ✓ |
+| Baseline continuity | session re-measured `wmma` 103.1 (committed: 100.2) and `cublas_tc` 229.0 (committed: 225.75) — same clock regime as Phase 1 | ✓ |
 
 **Scope of the claim (kept honest):** the kernel beats *the kernel cuBLAS chooses to dispatch*
 on sm_120 (an sm_80-generation CUTLASS kernel, 128×64 tile) — it does **not** beat the hardware
 peak. GB202's FP16→FP32-acc dense peak is **measured directly** by the Phase 4 rate probe
 (`src/mma_rate_probe.cu`, below): **440.3 TFLOP/s** at the sustained power-capped clock
 (1024 FLOP/SM/clk — confirmed full-rate, not the consumer GB202's half-rate). Both our kernel
-(**55.2%** of that) and cuBLAS (52.1%) leave headroom. Full analysis: `results/mma_ablation.md`.
+(**55.2%** of that) and cuBLAS (51.3%) leave headroom. Full analysis: `results/mma_ablation.md`.
 
 ## Phase 3 FP8/FP4 kernels — throughput ratios vs hardware spec
 
@@ -211,22 +211,22 @@ it at **half** rate, and no public spec exists for the RTX PRO 6000. The Phase 4
 | Power-cap effect isolated | FP32-acc draws more power → sustained clock ~3.1% lower (426.7 vs 440.3 TFLOP/s); per-clock identical | ✓ |
 
 **Consequences for the numbers above:** peak = **440.3 TFLOP/s** (FP16/FP32-acc dense, 300 W
-sustained). `mma_warptile` = 55.2% of peak, cuBLAS-TC = 52.1%, `mma_fp8` = 57.2% of 2× peak,
+sustained). `mma_warptile` = 55.2% of peak, cuBLAS-TC = 51.3%, `mma_fp8` = 57.2% of 2× peak,
 `mma_mxfp4` = 56.4% of 4× peak. The previous "~440 if full-rate" inference is replaced by direct
 measurement.
 
 ## H100 (sm_90) cross-check — does any of this transfer?
 
-The roadmap question: does the 45.2%-of-cuBLAS-TC result (and the tile/pipeline choices behind
+The roadmap question: does the 44.4%-of-cuBLAS-TC result (and the tile/pipeline choices behind
 it) transfer from sm_120 to H100? Measured (`ARCH=90 make bench` on one idle GPU of an 8×H100
 box):
 
 | check | sm_120 | sm_90 (H100) | verdict |
 |---|---|---|---|
-| WMMA absolute TFLOP/s @8192 | 103.5 | 60.9 | ratio ≈ SM count × clock (188 SM @ ~2.6 GHz vs 132 SM @ ~1.98 GHz) — `mma.sync`-issue-bound code scales with issue slots, as expected |
-| cuBLAS-TC ceiling @8192 | 229.2 (`cutlass_80_tensorop`) | 761.7 (`nvjet_sm90`, wgmma) | H100's ceiling is 3.3× higher *and* uses a different instruction class |
-| **WMMA % of cuBLAS-TC** | **45.2%** | **8.0%** | **does NOT transfer** |
-| cuBLAS-TC % of card's FP16 peak | ~92% of ~250 | ~77% of 989 | both ceilings are honest |
+| WMMA absolute TFLOP/s @8192 | 100.2 | 60.9 | ratio ≈ SM count × clock (188 SM @ ~2.6 GHz vs 132 SM @ ~1.98 GHz) — `mma.sync`-issue-bound code scales with issue slots, as expected |
+| cuBLAS-TC ceiling @8192 | 225.75 (`cutlass_80_tensorop`) | 761.7 (`nvjet_sm90`, wgmma) | H100's ceiling is 3.3× higher *and* uses a different instruction class |
+| **WMMA % of cuBLAS-TC** | **44.4%** | **8.0%** | **does NOT transfer** |
+| cuBLAS-TC % of card's FP16 peak | ~51% of ~440 | ~77% of 989 | both ceilings are honest |
 | FP32 `cublasSgemm` dispatches sm_80 FFMA kernel | yes | yes | the "baseline is an sm_80 kernel" statement holds on both — no scoping needed |
 | max abs err (wmma, 8192) | 0.0112 | 0.0112 | bit-identical rounding behavior — same code, same math |
 
@@ -249,9 +249,9 @@ literature lets us separate them.
    throughput and MIO-queue-full as the top stall — the shared-memory operand pipeline (tile
    size and 3-stage `cp.async` depth tuned on sm_120, whose Tensor Cores are 3.3× slower)
    cannot feed Hopper's TCs. The kernel kept the *same absolute* operand-feed rate on both
-   cards, which was 45% of the ceiling on sm_120 and is 8% of the 3.3×-higher ceiling on H100.
+   cards, which was 44% of the ceiling on sm_120 and is 8% of the 3.3×-higher ceiling on H100.
 
-The honest summary: the 45.2% → 8.0% collapse is **(ceiling moved 3.3× up) × (our feed
+The honest summary: the 44.4% → 8.0% collapse is **(ceiling moved 3.3× up) × (our feed
 pipeline did not move)**. Hopper-tuned operand staging could in principle recover to roughly
 the mma.sync ceiling (~63–65% of peak ≈ ~85% of cuBLAS-TC); the remainder is unreachable
 without `wgmma` — i.e., without abandoning the WMMA API this repo is about.

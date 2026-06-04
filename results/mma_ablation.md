@@ -25,8 +25,8 @@ Chart: `mma_ablation_sm120.png`.
 | 5 | `mma_warptile` | + 64×64 per-warp register tile (4 warps/CTA, 196 reg/thread) | **243.2** | **106.1%** | +37% |
 | ceiling | `cublas_tc` | `cublasGemmEx` FP16-in/FP32-acc (dispatches `cutlass_80_tensorop_s16816gemm_f16_128x64_64x3`) | 229.0 | 100% | – |
 
-Session baselines reproduce the committed Phase 1 numbers: `wmma` 103.1 vs 103.5 (−0.3%),
-`cublas_tc` 229.0 vs 229.2 (−0.1%) — same clock regime, comparisons valid.
+Session baselines reproduce the committed Phase 1 numbers: `wmma` 103.1 vs 100.2 (+2.9%),
+`cublas_tc` 229.0 vs 225.75 (+1.4%) — same clock regime, comparisons valid.
 
 ### Reading the ladder
 
@@ -83,7 +83,7 @@ directly (Phase 4 probe, `src/mma_rate_probe.cu`): a register-resident back-to-b
 loop executes **1023.7 FLOP/SM/clk with FP16 accumulate and 1023.8 with FP32 accumulate** —
 per-clock ratio 1.000, i.e. **the workstation part is full-rate**, unlike the consumer RTX 5090.
 The measured dense peak at the sustained power-capped clock is **440.3 TFLOP/s**
-(`results/mma_rate_probe.csv`), so our kernel sits at **55.2%** of peak and cuBLAS at 52.1% —
+(`results/mma_rate_probe.csv`), so our kernel sits at **55.2%** of peak and cuBLAS at 51.3% —
 both have ample headroom. The honest claim stays relative: **106% of the cuBLAS-TC ceiling on
 this card** — the same ceiling every other number in this repo is quoted against.
 
