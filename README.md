@@ -34,8 +34,9 @@ measured TFLOP/s as a fraction of the cuBLAS ceiling, on real Hopper and Blackwe
 >    rebuilt with CUTLASS 3.x (TMA + `wgmma`) reaches 85.5% of cuBLAS-TC on H100, a 10.5×
 >    recovery from the instruction class alone. Findings 1 and 3 show the same thing on two
 >    architectures: a kernel that does not reach the *current* generation's native instruction
->    loses the ceiling. Third-party ceilings (DeepGEMM, ThunderKittens, FlashAttention-3, Stream-K)
->    are also measured on this box as reference rows, all within ±12% of their published numbers.
+>    loses the ceiling. Third-party ceilings (DeepGEMM, ThunderKittens, FlashAttention-3) are also
+>    measured on this box as reference rows, all within 12% of their published numbers. Stream-K's
+>    claimed speedup does not reproduce here (Phase 4).
 
 ## What this is NOT
 - Not a cuBLAS replacement. cuBLAS is the ceiling everything is measured against.
@@ -378,8 +379,9 @@ The leading open-source kernels, run unmodified with their own benchmarks on thi
 | *this repo's WMMA kernel, context* | *61* | *6%* | n/a | n/a |
 | *this repo's CUTLASS wgmma kernel, context* | *641* | *65%* | n/a | n/a |
 
-Two readings: (1) the published numbers are honest: every project reproduces within ~±10%
-on our shared box at stock clocks, so the repo's own gaps are real, not environmental;
+Two readings: (1) the published numbers hold up: the three projects with a published figure
+reproduce within 12% on our shared box at stock clocks (DeepGEMM FP8 at 112% of its H800 number,
+the rest within 2%), so the repo's own gaps are real, not environmental;
 (2) the FP8 ceiling (~1500 TFLOPS measured) is the target Phase 3's own FP8 kernel work
 gets measured against.
 
